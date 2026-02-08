@@ -2,6 +2,7 @@ import type {
   MaterialRequirement,
   WindowDimension,
   DimensionGlassInfo,
+  StockOption,
 } from "../types";
 import {
   optimizeStockUsage,
@@ -117,20 +118,21 @@ function calculateInterlockPieces(
 /**
  * Calculates accessories from dimensions
  */
+/**
+ * Calculates accessories from dimensions
+ */
 function calculateAccessories(
   dimensions: WindowDimension[],
   calculateAccessoriesFn: (
-    config: Configuration,
     quantity: number
-  ) => { mosquitoCChannel: number; trackCap: number },
-  configuration: Configuration
+  ) => { mosquitoCChannel: number; trackCap: number }
 ): { mosquitoCChannel: number; trackCap: number } {
   let totalMosquitoCChannel = 0;
   let totalTrackCap = 0;
 
   dimensions.forEach((dim) => {
     const quantity = dim.quantity!;
-    const accessories = calculateAccessoriesFn(configuration, quantity);
+    const accessories = calculateAccessoriesFn(quantity);
     totalMosquitoCChannel += accessories.mosquitoCChannel;
     totalTrackCap += accessories.trackCap;
   });
@@ -144,9 +146,13 @@ function calculateAccessories(
 /**
  * Creates frame material requirement
  */
+/**
+ * Creates frame material requirement
+ */
 function createFrameMaterial(
   widthPieces: PieceCount[],
-  heightPieces: PieceCount[]
+  heightPieces: PieceCount[],
+  stockOptions?: StockOption[]
 ): MaterialRequirement {
   const framePieceRequirements: PieceRequirement[] = [
     ...widthPieces.map((p) => ({
@@ -161,7 +167,7 @@ function createFrameMaterial(
     })),
   ];
 
-  const frameBreakdown = optimizeCombinedStockUsage(framePieceRequirements);
+  const frameBreakdown = optimizeCombinedStockUsage(framePieceRequirements, stockOptions);
   const frameTotal =
     widthPieces.reduce((sum, p) => sum + p.length * p.count, 0) +
     heightPieces.reduce((sum, p) => sum + p.length * p.count, 0);
@@ -187,7 +193,8 @@ function createFrameMaterial(
 function createShutterMaterial(
   heightPieces: PieceCount[],
   widthPieces: PieceCount[],
-  shutterLabel: string
+  shutterLabel: string,
+  stockOptions?: StockOption[]
 ): MaterialRequirement {
   const shutterPieceRequirements: PieceRequirement[] = [
     ...heightPieces.map((p) => ({
@@ -202,7 +209,7 @@ function createShutterMaterial(
     })),
   ];
 
-  const shutterBreakdown = optimizeCombinedStockUsage(shutterPieceRequirements);
+  const shutterBreakdown = optimizeCombinedStockUsage(shutterPieceRequirements, stockOptions);
   const shutterTotal =
     heightPieces.reduce((sum, p) => sum + p.length * p.count, 0) +
     widthPieces.reduce((sum, p) => sum + p.length * p.count, 0);
@@ -227,7 +234,8 @@ function createShutterMaterial(
  */
 function createInterlockMaterial(
   interlockPieces: PieceCount[],
-  trackType: string
+  trackType: string,
+  stockOptions?: StockOption[]
 ): MaterialRequirement {
   const interlockPieceRequirements: PieceRequirement[] = interlockPieces.map(
     (p) => ({
@@ -248,10 +256,10 @@ function createInterlockMaterial(
     // All same length - use simple optimization
     const length = interlockPieces[0].length;
     const totalCount = interlockPieces.reduce((sum, p) => sum + p.count, 0);
-    interlockBreakdown = optimizeStockUsage(length, totalCount);
+    interlockBreakdown = optimizeStockUsage(length, totalCount, stockOptions);
   } else {
     // Different lengths - use combined optimization
-    interlockBreakdown = optimizeCombinedStockUsage(interlockPieceRequirements);
+    interlockBreakdown = optimizeCombinedStockUsage(interlockPieceRequirements, stockOptions);
   }
 
   const interlockDesc = interlockPieces
@@ -269,14 +277,21 @@ function createInterlockMaterial(
   };
 }
 
+
+import { SectionConfiguration } from "@prisma/client";
+
 /**
  * Calculates materials for a section
  */
-export function calculateSectionMaterials(section: {
-  dimensions: WindowDimension[];
-  trackType: "2-track" | "3-track";
-  configuration: "all-glass" | "glass-mosquito";
-}): SectionMaterialsResult {
+export function calculateSectionMaterials(
+  section: {
+    dimensions: WindowDimension[];
+    trackType: "2-track" | "3-track";
+    configuration: "all-glass" | "glass-mosquito";
+  },
+  sectionConfigData: SectionConfiguration,
+  stockOptions?: StockOption[]
+): SectionMaterialsResult {
   const { trackType, configuration, dimensions } = section;
 
   // Filter out invalid dimensions
@@ -290,7 +305,7 @@ export function calculateSectionMaterials(section: {
     };
   }
 
-  const sectionConfig = getSectionConfig(trackType, configuration);
+  const sectionConfig = getSectionConfig(sectionConfigData);
   const materials: MaterialRequirement[] = [];
   const glassInfo: DimensionGlassInfo[] = [];
 
@@ -310,7 +325,7 @@ export function calculateSectionMaterials(section: {
 
   // Calculate frame pieces
   const { widthPieces, heightPieces } = calculateFramePieces(validDimensions);
-  materials.push(createFrameMaterial(widthPieces, heightPieces));
+  materials.push(createFrameMaterial(widthPieces, heightPieces, stockOptions));
 
   // Calculate shutter pieces (using single source of truth for final dimensions)
   const { heightPieces: shutterHeightPieces, widthPieces: shutterWidthPieces } =
@@ -320,9 +335,9 @@ export function calculateSectionMaterials(section: {
       sectionConfig.calculateFinalDimensions,
       configuration
     );
-  const shutterLabel = sectionConfig.getShutterLabel(configuration);
+  const shutterLabel = sectionConfig.getShutterLabel();
   materials.push(
-    createShutterMaterial(shutterHeightPieces, shutterWidthPieces, shutterLabel)
+    createShutterMaterial(shutterHeightPieces, shutterWidthPieces, shutterLabel, stockOptions)
   );
 
   // Calculate interlock pieces
@@ -331,13 +346,12 @@ export function calculateSectionMaterials(section: {
     sectionConfig.calculateInterlockLength,
     sectionConfig.calculateInterlockCount
   );
-  materials.push(createInterlockMaterial(interlockPieces, trackType));
+  materials.push(createInterlockMaterial(interlockPieces, trackType, stockOptions));
 
   // Calculate accessories
   const accessories = calculateAccessories(
     validDimensions,
-    sectionConfig.calculateAccessories,
-    configuration
+    sectionConfig.calculateAccessories
   );
 
   return {

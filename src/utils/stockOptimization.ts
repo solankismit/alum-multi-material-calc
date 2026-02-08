@@ -26,13 +26,14 @@ export interface CombinedStockBreakdown extends StockBreakdown {
  */
 export function optimizeStockUsage(
   requiredLength: number,
-  totalPieces: number
+  totalPieces: number,
+  stockOptions: StockOption[] = STOCK_OPTIONS
 ): StockBreakdown {
   let bestOption: StockBreakdown | null = null;
   let minWastagePercent = Infinity;
   let bestCuttingPlans: CuttingPlan[] = [];
 
-  for (const stock of STOCK_OPTIONS) {
+  for (const stock of stockOptions) {
     const piecesPerStock = Math.floor(stock.length / requiredLength);
     if (piecesPerStock === 0) continue;
 
@@ -78,8 +79,8 @@ export function optimizeStockUsage(
     }
   }
 
-  if (!bestOption) {
-    const largestStock = STOCK_OPTIONS[0];
+  if (!bestOption && stockOptions.length > 0) {
+    const largestStock = stockOptions[0];
     const cuttingPlans: CuttingPlan[] = [];
     for (let i = 0; i < totalPieces; i++) {
       cuttingPlans.push({
@@ -102,6 +103,11 @@ export function optimizeStockUsage(
       requiredLength,
       totalPieces,
     };
+  }
+
+  // Fallback if still null (e.g. empty stockOptions passed)
+  if (!bestOption) {
+    throw new Error("No valid stock options provided");
   }
 
   return bestOption;
@@ -143,7 +149,8 @@ export function packStock(
  * Optimizes stock usage for multiple piece types using bin packing
  */
 export function optimizeCombinedStockUsage(
-  pieceRequirements: PieceRequirement[]
+  pieceRequirements: PieceRequirement[],
+  stockOptions: StockOption[] = STOCK_OPTIONS
 ): CombinedStockBreakdown {
   let bestSolution: {
     stockCounts: { [stockName: string]: number };
@@ -153,6 +160,9 @@ export function optimizeCombinedStockUsage(
     pieceBreakdown: { [type: string]: number };
   } | null = null;
   let minWastagePercent = Infinity;
+
+  // Use passed stockOptions
+  const currentStockOptions = stockOptions.length > 0 ? stockOptions : STOCK_OPTIONS;
 
   // Pack pieces into stocks using greedy algorithm
   const stockCounts: { [stockName: string]: number } = {};
@@ -177,7 +187,7 @@ export function optimizeCombinedStockUsage(
     let bestWastage = Infinity;
 
     // Try each stock size
-    for (const stock of STOCK_OPTIONS) {
+    for (const stock of currentStockOptions) {
       const packed = packStock(stock, remainingPieces);
       if (packed.pieces.length > 0 && packed.wastage < bestWastage) {
         bestStock = stock;
@@ -243,7 +253,7 @@ export function optimizeCombinedStockUsage(
 
   // If no solution found, use fallback
   if (!bestSolution) {
-    const largestStock = STOCK_OPTIONS[0];
+    const largestStock = currentStockOptions[0];
     const cuttingPlans: CuttingPlan[] = [];
     let stockIndex = 1;
     let totalStockLength = 0;
@@ -288,9 +298,9 @@ export function optimizeCombinedStockUsage(
   const primaryStockName =
     Object.entries(bestSolution.stockCounts).sort(
       (a, b) => b[1] - a[1]
-    )[0]?.[0] || "16ft";
+    )[0]?.[0] || currentStockOptions[0].name;
   const primaryStock =
-    STOCK_OPTIONS.find((s) => s.name === primaryStockName) || STOCK_OPTIONS[0];
+    currentStockOptions.find((s) => s.name === primaryStockName) || currentStockOptions[0];
 
   return {
     stockLength: primaryStock.length,

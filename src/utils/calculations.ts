@@ -1,4 +1,5 @@
-import type { WindowInput, CalculationResult, SectionResult } from "../types";
+import type { WindowInput, CalculationResult, SectionResult, StockOption } from "../types";
+import { SectionConfiguration } from "@prisma/client";
 import { calculateSectionMaterials } from "./materialCalculation";
 import {
   calculateSectionSummary,
@@ -9,16 +10,38 @@ import {
 /**
  * Main function to calculate materials for multiple sections
  */
-export function calculateMaterials(input: WindowInput): CalculationResult {
+export function calculateMaterials(
+  input: WindowInput,
+  availableConfigs: SectionConfiguration[],
+  stockOptions?: StockOption[]
+): CalculationResult {
   const sectionResults: SectionResult[] = [];
 
   // Process each section
   input.sections.forEach((section) => {
-    const materialsResult = calculateSectionMaterials({
-      dimensions: section.dimensions,
-      trackType: section.trackType,
-      configuration: section.configuration,
-    });
+    // Find matching config from DB data
+    const sectionConfigData = availableConfigs.find(
+      (c) =>
+        c.trackType === section.trackType &&
+        c.configuration === section.configuration
+    );
+
+    if (!sectionConfigData) {
+      console.warn(
+        `No configuration found for ${section.trackType} - ${section.configuration}`
+      );
+      return;
+    }
+
+    const materialsResult = calculateSectionMaterials(
+      {
+        dimensions: section.dimensions,
+        trackType: section.trackType,
+        configuration: section.configuration,
+      },
+      sectionConfigData,
+      stockOptions
+    );
 
     const summary = calculateSectionSummary(materialsResult.materials);
 

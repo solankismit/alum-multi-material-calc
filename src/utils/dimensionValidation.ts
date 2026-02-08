@@ -17,15 +17,15 @@ export interface DimensionValidationResult {
 export const DIMENSION_CONSTRAINTS = {
   height: {
     min: 300, // mm
-    max: 3000, // mm
+    max: 300000, // mm
   },
   width: {
     min: 300, // mm
-    max: 5000, // mm
+    max: 500000, // mm
   },
   quantity: {
     min: 1,
-    max: 100,
+    max: 10000,
   },
 } as const;
 

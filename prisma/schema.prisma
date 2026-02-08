@@ -1,0 +1,117 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  GUEST
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  role      Role     @default(USER)
+  company   String?
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  worksheets Worksheet[]
+  
+  // User-specific preferences for section stock lengths
+  sectionPreferences UserSectionPreference[]
+}
+
+model SectionType {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  isActive    Boolean  @default(true)
+  trackTypes  String[] // ["2-track", "3-track"]
+  configs     String[] // ["all-glass", "glass-mosquito"]
+  
+  configurations SectionConfiguration[]
+  stockLengths   StockLength[]
+}
+
+// Stores the specific formulas/constants for a (TrackType + Config) variation
+model SectionConfiguration {
+  id            String      @id @default(uuid())
+  sectionTypeId String
+  sectionType   SectionType @relation(fields: [sectionTypeId], references: [id], onDelete: Cascade)
+  
+  trackType     String 
+  configuration String // "all-glass", "glass-mosquito"
+  
+  // Formula coefficients / corrections using descriptive names
+  shutterWidthDeduction    Float // correction for shutter width (was x)
+  heightDeduction          Float // correction for height (was y)
+  threeTrackWidthAddition  Float // width adjustment for 3-track 3-glass (was z)
+  glassWidthDeduction      Float // glass width deduction (was a)
+  glassHeightDeduction     Float // glass height deduction (was b)
+  
+  // Multipliers for Frame/Interlock calculation
+  frameMultiplierW Float @default(2)
+  frameMultiplierH Float @default(2)
+
+  // Interlock count multiplier logic can be inferred or added if needed
+  // For now relying on standard logic: 2-track = qty, 3-track = 3*qty (or configurable later)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sectionTypeId, trackType, configuration])
+}
+
+model StockLength {
+  id            String      @id @default(uuid())
+  sectionTypeId String
+  sectionType   SectionType @relation(fields: [sectionTypeId], references: [id], onDelete: Cascade)
+  
+  length     Float // in mm
+  lengthFeet Float
+  isActive   Boolean @default(true)
+
+  userPreferences UserSectionPreference[]
+
+  @@unique([sectionTypeId, length])
+}
+
+model UserSectionPreference {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  stockLengthId String
+  stockLength   StockLength @relation(fields: [stockLengthId], references: [id], onDelete: Cascade)
+  
+  isActive      Boolean     @default(true) // User can override default active status for themselves
+
+  @@unique([userId, stockLengthId])
+}
+
+model Worksheet {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name      String
+  data      Json     // Stores the WindowInput and Result
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

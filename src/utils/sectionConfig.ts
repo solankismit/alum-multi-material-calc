@@ -4,25 +4,10 @@
  */
 
 import { GlassSize } from "../types";
+import { SectionConfiguration } from "@prisma/client";
 
 export type TrackType = "2-track" | "3-track";
 export type Configuration = "all-glass" | "glass-mosquito";
-
-/**
- * Glass correction values for different section types
- * x: width correction for shutter (subtracted from shutter width)
- * y: height correction (subtracted from height)
- * z: width adjustment for 3-track 3-glass (added to section width before dividing)
- * a: glass width deduction
- * b: glass height deduction
- */
-export interface GlassCorrections {
-  x: number; // mm
-  y: number; // mm
-  z: number; // mm
-  a: number; // mm
-  b: number; // mm
-}
 
 /**
  * Final dimensions after applying corrections
@@ -42,19 +27,17 @@ export interface SectionTypeConfig {
    */
   calculateFinalDimensions: (
     sectionWidth: number,
-    sectionHeight: number,
-    configuration: Configuration
+    sectionHeight: number
   ) => FinalDimensions;
   calculateInterlockLength: (height: number) => number;
   calculateInterlockCount: (quantity: number) => number;
   calculateAccessories: (
-    configuration: Configuration,
     quantity: number
   ) => {
     mosquitoCChannel: number;
     trackCap: number;
   };
-  getShutterLabel: (configuration: Configuration) => string;
+  getShutterLabel: () => string;
   calculateGlassSize: (
     sectionWidth: number,
     sectionHeight: number,
@@ -63,26 +46,14 @@ export interface SectionTypeConfig {
 }
 
 /**
- * Glass correction values for 27mm Domal section type
- * TODO: Update these values with actual measurements
- */
-const GLASS_CORRECTIONS_27MM_DOMAL: GlassCorrections = {
-  x: 3.175, // TODO: Set actual value for width correction
-  y: 66.675, // TODO: Set actual value for height correction
-  z: 63.5, // TODO: Set actual value for 3-track 3-glass width adjustment
-  a: 104.775, // TODO: Set actual value for glass width deduction
-  b: 104.775, // TODO: Set actual value for glass height deduction
-};
-
-/**
- * Get section configuration based on track type and configuration
+ * Get section configuration based on database config
  */
 export function getSectionConfig(
-  trackType: TrackType,
-  configuration: Configuration
+  dbConfig: SectionConfiguration
 ): SectionTypeConfig {
+  const trackType = dbConfig.trackType as TrackType;
+  const configuration = dbConfig.configuration as Configuration;
   const numberOfShutters = trackType === "3-track" ? 3 : 2;
-  const corrections = GLASS_CORRECTIONS_27MM_DOMAL;
 
   /**
    * Single source of truth for calculating final dimensions
@@ -90,23 +61,22 @@ export function getSectionConfig(
    */
   const calculateFinalDimensions = (
     sectionWidth: number,
-    sectionHeight: number,
-    config: Configuration
+    sectionHeight: number
   ): FinalDimensions => {
     let shutterWidth: number;
 
-    if (trackType === "3-track" && config === "all-glass") {
+    if (trackType === "3-track" && configuration === "all-glass") {
       // For 3-track 3-glass: Final shutter width = (section width + z) / 3
-      shutterWidth = (sectionWidth + corrections.z) / 3;
+      shutterWidth = (sectionWidth + dbConfig.threeTrackWidthAddition) / 3;
     } else {
       // For 3-track 2 glass-mosquito and 2-track 2 glass:
       // Final shutter width = (section width / 2) - x
       const baseShutterWidth = sectionWidth / 2;
-      shutterWidth = baseShutterWidth - corrections.x;
+      shutterWidth = baseShutterWidth - dbConfig.shutterWidthDeduction;
     }
 
     // Final height = height - y (applies to all section types)
-    const height = sectionHeight - corrections.y;
+    const height = sectionHeight - dbConfig.heightDeduction;
 
     return {
       shutterWidth,
@@ -120,21 +90,24 @@ export function getSectionConfig(
     numberOfShutters,
     calculateFinalDimensions,
     calculateInterlockLength: (height: number) => {
+      // Using multiplier from DB if available, otherwise fallback to standard logic
+      // Standard logic: 2-track = height * 2, 3-track = height * 1
+      // Ideally this should be configurable in DB too, but for now keeping logic consistent
       return trackType === "2-track" ? height * 2 : height;
     },
     calculateInterlockCount: (quantity: number) => {
       return trackType === "2-track" ? quantity : numberOfShutters * quantity;
     },
-    calculateAccessories: (config: Configuration, quantity: number) => {
+    calculateAccessories: (quantity: number) => {
       return {
         mosquitoCChannel:
-          config === "glass-mosquito" && trackType === "3-track" ? quantity : 0,
+          configuration === "glass-mosquito" && trackType === "3-track" ? quantity : 0,
         trackCap: quantity,
       };
     },
-    getShutterLabel: (config: Configuration) => {
+    getShutterLabel: () => {
       if (trackType === "3-track") {
-        return config === "all-glass"
+        return configuration === "all-glass"
           ? "Glass shutters (3)"
           : "Glass + Mosquito shutters (3)";
       } else {
@@ -149,13 +122,14 @@ export function getSectionConfig(
       // Use single source of truth for final dimensions
       const finalDimensions = calculateFinalDimensions(
         sectionWidth,
-        sectionHeight,
-        configuration
+        sectionHeight
       );
 
       // Glass Size = (Final Shutter Width - a) × (Final Height - b)
-      const glassWidth = finalDimensions.shutterWidth - corrections.a;
-      const glassHeight = finalDimensions.height - corrections.b;
+      const glassWidth =
+        finalDimensions.shutterWidth - dbConfig.glassWidthDeduction;
+      const glassHeight =
+        finalDimensions.height - dbConfig.glassHeightDeduction;
       const glassArea = glassWidth * glassHeight;
 
       // Glasses = Glass Size × total number of shutters

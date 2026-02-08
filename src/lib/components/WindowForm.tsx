@@ -6,30 +6,36 @@ import {
   validateDimension,
 } from "@/utils/dimensionValidation";
 import type { WindowInput, WindowSection, WindowDimension } from "@/types";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
 
 interface WindowFormProps {
   onCalculate: (input: WindowInput) => void;
   onReset: () => void;
+  initialValues?: WindowInput;
 }
 
-export default function WindowForm({ onCalculate, onReset }: WindowFormProps) {
+export default function WindowForm({ onCalculate, onReset, initialValues }: WindowFormProps) {
   const [unitMode, setUnitMode] = useState<"mm" | "ft">("mm");
-  const [sections, setSections] = useState<WindowSection[]>([
-    {
-      id: "section-1",
-      name: "Section 1",
-      dimensions: [
-        {
-          id: `dim-${Date.now()}`,
-          height: null,
-          width: null,
-          quantity: null,
-        },
-      ],
-      trackType: "3-track",
-      configuration: "glass-mosquito",
-    },
-  ]);
+  const [sections, setSections] = useState<WindowSection[]>(
+    initialValues?.sections || [
+      {
+        id: `section-${Date.now()}`,
+        name: "Section 1",
+        dimensions: [
+          {
+            id: `dim-${Date.now()}`,
+            height: null,
+            width: null,
+            quantity: null,
+          },
+        ],
+        trackType: "3-track",
+        configuration: "glass-mosquito",
+      },
+    ]);
   const [errors, setErrors] = useState<{
     [sectionId: string]: {
       [dimId: string]: {
@@ -223,7 +229,7 @@ export default function WindowForm({ onCalculate, onReset }: WindowFormProps) {
   const handleReset = () => {
     setSections([
       {
-        id: "section-1",
+        id: `section-${Date.now()}`,
         name: "Section 1",
         dimensions: [
           {
@@ -241,575 +247,427 @@ export default function WindowForm({ onCalculate, onReset }: WindowFormProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
-      <h2 className="text-2xl font-semibold text-slate-800 mb-6">
-        Window Specifications
-      </h2>
+    <Card className="border-0 shadow-lg sm:border sm:border-slate-200">
+      <CardHeader className="pb-4 border-b border-slate-100 mb-6 bg-slate-50/50">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <CardTitle className="text-2xl font-semibold text-slate-800">
+            Window Specifications
+          </CardTitle>
 
-      <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
-        <span className="text-sm font-medium text-slate-700">
-          Measurement Unit:
-        </span>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => handleUnitToggle("mm")}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${unitMode === "mm"
-              ? "bg-slate-700 text-white"
-              : "bg-slate-200 text-slate-700 hover:bg-slate-300"
-              }`}
-          >
-            mm
-          </button>
-          <button
-            type="button"
-            onClick={() => handleUnitToggle("ft")}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${unitMode === "ft"
-              ? "bg-slate-700 text-white"
-              : "bg-slate-200 text-slate-700 hover:bg-slate-300"
-              }`}
-          >
-            ft
-          </button>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {sections.map((section) => (
-          <div
-            key={section.id}
-            className="border-2 border-slate-200 rounded-lg p-4 space-y-4"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3 flex-1">
-                <input
-                  type="text"
-                  value={section.name}
-                  onChange={(e) =>
-                    updateSection(section.id, { name: e.target.value })
-                  }
-                  className="text-lg font-semibold text-slate-800 bg-transparent border-b-2 border-slate-300 focus:border-slate-600 outline-none px-1"
-                  placeholder="Section Name"
-                />
-              </div>
-              {sections.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeSection(section.id)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Remove Section"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              )}
+          <div className="flex items-center gap-3 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
+            <span className="text-xs font-semibold uppercase text-slate-500 px-2">Unit:</span>
+            <div className="flex gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={unitMode === "mm" ? "primary" : "ghost"}
+                onClick={() => handleUnitToggle("mm")}
+                className={`h-8 px-4 ${unitMode === "mm" ? "bg-slate-800" : "text-slate-600 hover:text-slate-900"}`}
+              >
+                mm
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={unitMode === "ft" ? "primary" : "ghost"}
+                onClick={() => handleUnitToggle("ft")}
+                className={`h-8 px-4 ${unitMode === "ft" ? "bg-slate-800" : "text-slate-600 hover:text-slate-900"}`}
+              >
+                ft
+              </Button>
             </div>
+          </div>
+        </div>
+      </CardHeader>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Track Type
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateSection(section.id, {
-                        trackType: "2-track",
-                        configuration: "all-glass",
-                      });
-                    }}
-                    className={`px-3 py-2 rounded-lg border-2 transition-all text-sm ${section.trackType === "2-track"
-                      ? "border-slate-600 bg-slate-50 text-slate-900 font-semibold"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                      }`}
-                  >
-                    2-Track
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateSection(section.id, { trackType: "3-track" })
+      <CardContent className="space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {sections.map((section, index) => (
+            <div
+              key={section.id}
+              className="relative p-6 bg-white border border-slate-200 rounded-xl shadow-sm transition-all hover:shadow-md hover:border-slate-300 group"
+            >
+              <div className="absolute top-0 left-0 w-1 h-full bg-slate-200 rounded-l-xl group-hover:bg-slate-400 transition-colors" />
+
+              <div className="flex flex-wrap items-start justify-between gap-4 mb-6 pl-2">
+                <div className="flex-1 min-w-[200px]">
+                  <Input
+                    label="Section Name"
+                    value={section.name}
+                    onChange={(e) =>
+                      updateSection(section.id, { name: e.target.value })
                     }
-                    className={`px-3 py-2 rounded-lg border-2 transition-all text-sm ${section.trackType === "3-track"
-                      ? "border-slate-600 bg-slate-50 text-slate-900 font-semibold"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                      }`}
-                  >
-                    3-Track
-                  </button>
+                    placeholder="e.g. Living Room Window"
+                    className="text-lg font-medium border-0 border-b border-slate-200 rounded-none px-0 focus:ring-0 focus:border-slate-800 transition-colors bg-transparent placeholder:text-slate-400"
+                  />
                 </div>
+                {sections.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeSection(section.id)}
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Remove
+                  </Button>
+                )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Configuration
-                </label>
-                <div className="space-y-1">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateSection(section.id, { configuration: "all-glass" })
-                    }
-                    className={`w-full px-3 py-2 rounded-lg border-2 transition-all text-left text-sm ${section.configuration === "all-glass"
-                      ? "border-slate-600 bg-slate-50 text-slate-900 font-semibold"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                      }`}
-                  >
-                    All Glass
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (section.trackType === "2-track") {
+              <div className="grid md:grid-cols-2 gap-6 mb-6 pl-2">
+                <div className="space-y-3">
+                  <Label className="text-slate-600 font-medium">Track Type</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
                         updateSection(section.id, {
                           trackType: "2-track",
                           configuration: "all-glass",
                         });
-                      } else {
-                        updateSection(section.id, {
-                          configuration: "glass-mosquito",
-                        });
+                      }}
+                      className={`h-12 border-2 ${section.trackType === "2-track"
+                          ? "border-slate-800 bg-slate-50 text-slate-900 ring-0"
+                          : "border-slate-100 text-slate-500 hover:border-slate-300"
+                        }`}
+                    >
+                      2-Track
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        updateSection(section.id, { trackType: "3-track" })
                       }
-                    }}
-                    disabled={section.trackType === "2-track"}
-                    className={`w-full px-3 py-2 rounded-lg border-2 transition-all text-left text-sm ${section.configuration === "glass-mosquito"
-                      ? "border-slate-600 bg-slate-50 text-slate-900 font-semibold"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                      } ${section.trackType === "2-track"
-                        ? "opacity-50 cursor-not-allowed bg-slate-100"
-                        : ""
-                      }`}
-                  >
-                    Glass + Mosquito
-                    {section.trackType === "2-track" && (
-                      <span className="text-xs text-slate-500 block mt-0.5">
-                        (Not available)
-                      </span>
-                    )}
-                  </button>
+                      className={`h-12 border-2 ${section.trackType === "3-track"
+                          ? "border-slate-800 bg-slate-50 text-slate-900 ring-0"
+                          : "border-slate-100 text-slate-500 hover:border-slate-300"
+                        }`}
+                    >
+                      3-Track
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-slate-600 font-medium">Configuration</Label>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        updateSection(section.id, { configuration: "all-glass" })
+                      }
+                      className={`justify-start border-2 ${section.configuration === "all-glass"
+                          ? "border-slate-800 bg-slate-50 text-slate-900 ring-0"
+                          : "border-slate-100 text-slate-500 hover:border-slate-300"
+                        }`}
+                    >
+                      <div className="w-2.5 h-2.5 rounded-full bg-slate-800 mr-3 opacity-0 data-[active=true]:opacity-100" data-active={section.configuration === "all-glass"} />
+                      All Glass
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        if (section.trackType === "2-track") {
+                          updateSection(section.id, {
+                            trackType: "2-track",
+                            configuration: "all-glass",
+                          });
+                        } else {
+                          updateSection(section.id, {
+                            configuration: "glass-mosquito",
+                          });
+                        }
+                      }}
+                      disabled={section.trackType === "2-track"}
+                      className={`justify-start border-2 ${section.configuration === "glass-mosquito"
+                          ? "border-slate-800 bg-slate-50 text-slate-900 ring-0"
+                          : "border-slate-100 text-slate-500 hover:border-slate-300"
+                        } ${section.trackType === "2-track" ? "opacity-50 cursor-not-allowed bg-slate-50" : ""}`}
+                    >
+                      <div className="w-2.5 h-2.5 rounded-full bg-slate-800 mr-3 opacity-0 data-[active=true]:opacity-100" data-active={section.configuration === "glass-mosquito"} />
+                      Glass + Mosquito
+                      {section.trackType === "2-track" && (
+                        <span className="ml-auto text-xs text-slate-400 font-normal">
+                          (Not available)
+                        </span>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 pl-2">
+                <Label className="text-slate-600 font-medium">Dimensions</Label>
+                <div className="space-y-3">
+                  {section.dimensions.map((dimension, idx) => (
+                    <div
+                      key={dimension.id}
+                      className="grid grid-cols-12 gap-3 items-start animate-in fade-in slide-in-from-top-1 duration-200"
+                    >
+                      <div className="col-span-5 sm:col-span-5">
+                        <Input
+                          label={idx === 0 ? `Height (${unitMode})` : undefined}
+                          type="number"
+                          step={unitMode === "ft" ? "0.01" : "0.1"}
+                          placeholder="Height"
+                          value={
+                            unitMode === "ft"
+                              ? rawInputs[section.id]?.[dimension.id]?.height ??
+                              (dimension.height === null
+                                ? ""
+                                : mmToFeet(dimension.height))
+                              : dimension.height === null
+                                ? ""
+                                : dimension.height
+                          }
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Handler logic reused from original
+                            if (value === "") {
+                              setRawInputs(prev => {
+                                const next = { ...prev };
+                                delete next[section.id]?.[dimension.id]?.height;
+                                return next;
+                              });
+                              updateDimension(section.id, dimension.id, { height: null });
+                              // Clear error
+                              if (errors[section.id]?.[dimension.id]?.height) {
+                                const nextErrors = { ...errors };
+                                delete nextErrors[section.id][dimension.id].height;
+                                setErrors(nextErrors);
+                              }
+                              return;
+                            }
+                            if (unitMode === "ft") {
+                              setRawInputs(prev => ({
+                                ...prev,
+                                [section.id]: {
+                                  ...prev[section.id],
+                                  [dimension.id]: {
+                                    ...prev[section.id]?.[dimension.id],
+                                    height: value
+                                  }
+                                }
+                              }));
+                            }
+                            const num = Number(value);
+                            if (!isNaN(num)) {
+                              updateDimension(section.id, dimension.id, {
+                                height: unitMode === "ft" ? feetToMm(num) : num
+                              });
+                            }
+                            // Clear error
+                            if (errors[section.id]?.[dimension.id]?.height) {
+                              const nextErrors = { ...errors };
+                              delete nextErrors[section.id][dimension.id].height;
+                              setErrors(nextErrors);
+                            }
+                          }}
+                          onBlur={() => {
+                            if (unitMode === "ft") {
+                              setRawInputs(prev => {
+                                const next = { ...prev };
+                                delete next[section.id]?.[dimension.id]?.height;
+                                return next;
+                              });
+                            }
+                            const res = validateDimension(dimension, unitMode);
+                            if (!res.isValid) {
+                              setErrors(prev => ({
+                                ...prev,
+                                [section.id]: {
+                                  ...prev[section.id],
+                                  [dimension.id]: {
+                                    ...prev[section.id]?.[dimension.id],
+                                    ...res.errors
+                                  }
+                                }
+                              }));
+                            } else {
+                              // Clear errors
+                              setErrors(prev => {
+                                const next = { ...prev };
+                                if (next[section.id]?.[dimension.id]) {
+                                  delete next[section.id][dimension.id].height;
+                                  if (Object.keys(next[section.id][dimension.id]).length === 0) {
+                                    delete next[section.id][dimension.id];
+                                  }
+                                }
+                                return next;
+                              });
+                            }
+                          }}
+                          error={errors[section.id]?.[dimension.id]?.height}
+                        />
+                      </div>
+
+                      <div className="col-span-5 sm:col-span-5">
+                        <Input
+                          label={idx === 0 ? `Width (${unitMode})` : undefined}
+                          type="number"
+                          step={unitMode === "ft" ? "0.01" : "0.1"}
+                          placeholder="Width"
+                          value={
+                            unitMode === "ft"
+                              ? rawInputs[section.id]?.[dimension.id]?.width ??
+                              (dimension.width === null
+                                ? ""
+                                : mmToFeet(dimension.width))
+                              : dimension.width === null
+                                ? ""
+                                : dimension.width
+                          }
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "") {
+                              setRawInputs(prev => {
+                                const next = { ...prev };
+                                delete next[section.id]?.[dimension.id]?.width;
+                                return next;
+                              });
+                              updateDimension(section.id, dimension.id, { width: null });
+                              if (errors[section.id]?.[dimension.id]?.width) {
+                                const nextErrors = { ...errors };
+                                delete nextErrors[section.id][dimension.id].width;
+                                setErrors(nextErrors);
+                              }
+                              return;
+                            }
+                            if (unitMode === "ft") {
+                              setRawInputs(prev => ({
+                                ...prev,
+                                [section.id]: {
+                                  ...prev[section.id],
+                                  [dimension.id]: {
+                                    ...prev[section.id]?.[dimension.id],
+                                    width: value
+                                  }
+                                }
+                              }));
+                            }
+                            const num = Number(value);
+                            if (!isNaN(num)) {
+                              updateDimension(section.id, dimension.id, {
+                                width: unitMode === "ft" ? feetToMm(num) : num
+                              });
+                            }
+                            if (errors[section.id]?.[dimension.id]?.width) {
+                              const nextErrors = { ...errors };
+                              delete nextErrors[section.id][dimension.id].width;
+                              setErrors(nextErrors);
+                            }
+                          }}
+                          onBlur={() => {
+                            if (unitMode === "ft") {
+                              setRawInputs(prev => {
+                                const next = { ...prev };
+                                delete next[section.id]?.[dimension.id]?.width;
+                                return next;
+                              });
+                            }
+                            const res = validateDimension(dimension, unitMode);
+                            if (!res.isValid) {
+                              setErrors(prev => ({
+                                ...prev,
+                                [section.id]: {
+                                  ...prev[section.id],
+                                  [dimension.id]: {
+                                    ...prev[section.id]?.[dimension.id],
+                                    ...res.errors
+                                  }
+                                }
+                              }));
+                            } else {
+                              setErrors(prev => {
+                                const next = { ...prev };
+                                if (next[section.id]?.[dimension.id]) {
+                                  delete next[section.id][dimension.id].width;
+                                  if (Object.keys(next[section.id][dimension.id]).length === 0) {
+                                    delete next[section.id][dimension.id];
+                                  }
+                                }
+                                return next;
+                              });
+                            }
+                          }}
+                          error={errors[section.id]?.[dimension.id]?.width}
+                        />
+                      </div>
+
+                      <div className="col-span-2 sm:col-span-2 relative">
+                        <Input
+                          label={idx === 0 ? "Qty" : undefined}
+                          type="number"
+                          min="1"
+                          max="100"
+                          placeholder="Qty"
+                          value={dimension.quantity === null ? "" : dimension.quantity}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "") {
+                              updateDimension(section.id, dimension.id, { quantity: null });
+                              return;
+                            }
+                            const num = Number(value);
+                            if (!isNaN(num)) updateDimension(section.id, dimension.id, { quantity: num });
+                          }}
+                          className="text-center"
+                        />
+                        {section.dimensions.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeDimension(section.id, dimension.id)}
+                            className="absolute -right-2 top-1/2 -translate-y-1/2 translate-x-full p-2 text-slate-400 hover:text-red-600 transition-colors"
+                            title="Remove Dimension"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
+          ))}
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Dimensions
-              </label>
-
-              {section.dimensions.map((dimension) => (
-                <div
-                  key={dimension.id}
-                  className="bg-slate-50 rounded-lg p-3 border border-slate-200 flex items-center gap-2"
-                >
-                  <div className="grid grid-cols-3 gap-2 flex-1">
-                    <div>
-                      <label className="block text-xs text-slate-600 mb-1">
-                        Height ({unitMode.toUpperCase()})
-                      </label>
-                      <input
-                        type="number"
-                        step={unitMode === "ft" ? "0.01" : "0.1"}
-                        value={
-                          unitMode === "ft"
-                            ? rawInputs[section.id]?.[dimension.id]?.height ??
-                            (dimension.height === null
-                              ? ""
-                              : mmToFeet(dimension.height))
-                            : dimension.height === null
-                              ? ""
-                              : dimension.height
-                        }
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === "") {
-                            // Clear raw input
-                            setRawInputs((prev) => {
-                              const newInputs = { ...prev };
-                              if (newInputs[section.id]?.[dimension.id]) {
-                                delete newInputs[section.id][dimension.id]
-                                  .height;
-                              }
-                              return newInputs;
-                            });
-                            updateDimension(section.id, dimension.id, {
-                              height: null,
-                            });
-                            // Clear error when user clears
-                            if (errors[section.id]?.[dimension.id]?.height) {
-                              const newErrors = { ...errors };
-                              if (newErrors[section.id]?.[dimension.id]) {
-                                delete newErrors[section.id][dimension.id]
-                                  .height;
-                              }
-                              setErrors(newErrors);
-                            }
-                            return;
-                          }
-                          // In feet mode, store raw input for free typing
-                          if (unitMode === "ft") {
-                            setRawInputs((prev) => ({
-                              ...prev,
-                              [section.id]: {
-                                ...prev[section.id],
-                                [dimension.id]: {
-                                  ...prev[section.id]?.[dimension.id],
-                                  height: value,
-                                },
-                              },
-                            }));
-                          }
-                          const numValue = Number(value);
-                          if (!isNaN(numValue)) {
-                            const mmValue =
-                              unitMode === "ft" ? feetToMm(numValue) : numValue;
-                            updateDimension(section.id, dimension.id, {
-                              height: mmValue,
-                            });
-                          }
-                          // Clear error when user starts typing
-                          if (errors[section.id]?.[dimension.id]?.height) {
-                            const newErrors = { ...errors };
-                            if (newErrors[section.id]?.[dimension.id]) {
-                              delete newErrors[section.id][dimension.id].height;
-                            }
-                            setErrors(newErrors);
-                          }
-                        }}
-                        onBlur={() => {
-                          // Clear raw input on blur to show formatted value
-                          if (unitMode === "ft") {
-                            setRawInputs((prev) => {
-                              const newInputs = { ...prev };
-                              if (newInputs[section.id]?.[dimension.id]) {
-                                delete newInputs[section.id][dimension.id]
-                                  .height;
-                              }
-                              return newInputs;
-                            });
-                          }
-                          // Validate on blur
-                          const validationResult = validateDimension(
-                            dimension,
-                            unitMode
-                          );
-                          if (!validationResult.isValid) {
-                            setErrors((prev) => ({
-                              ...prev,
-                              [section.id]: {
-                                ...prev[section.id],
-                                [dimension.id]: validationResult.errors,
-                              },
-                            }));
-                          } else {
-                            // Clear errors if valid
-                            setErrors((prev) => {
-                              const newErrors = { ...prev };
-                              if (newErrors[section.id]?.[dimension.id]) {
-                                delete newErrors[section.id][dimension.id]
-                                  .height;
-                                if (
-                                  Object.keys(
-                                    newErrors[section.id][dimension.id]
-                                  ).length === 0
-                                ) {
-                                  delete newErrors[section.id][dimension.id];
-                                }
-                              }
-                              return newErrors;
-                            });
-                          }
-                        }}
-                        className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent ${errors[section.id]?.[dimension.id]?.height
-                          ? "border-red-300"
-                          : "border-slate-300"
-                          }`}
-                      />
-                      {errors[section.id]?.[dimension.id]?.height && (
-                        <p className="mt-1 text-xs text-red-600">
-                          {errors[section.id][dimension.id].height}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-slate-600 mb-1">
-                        Width ({unitMode.toUpperCase()})
-                      </label>
-                      <input
-                        type="number"
-                        step={unitMode === "ft" ? "0.01" : "0.1"}
-                        value={
-                          unitMode === "ft"
-                            ? rawInputs[section.id]?.[dimension.id]?.width ??
-                            (dimension.width === null
-                              ? ""
-                              : mmToFeet(dimension.width))
-                            : dimension.width === null
-                              ? ""
-                              : dimension.width
-                        }
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === "") {
-                            // Clear raw input
-                            setRawInputs((prev) => {
-                              const newInputs = { ...prev };
-                              if (newInputs[section.id]?.[dimension.id]) {
-                                delete newInputs[section.id][dimension.id]
-                                  .width;
-                              }
-                              return newInputs;
-                            });
-                            updateDimension(section.id, dimension.id, {
-                              width: null,
-                            });
-                            // Clear error when user clears
-                            if (errors[section.id]?.[dimension.id]?.width) {
-                              const newErrors = { ...errors };
-                              if (newErrors[section.id]?.[dimension.id]) {
-                                delete newErrors[section.id][dimension.id]
-                                  .width;
-                              }
-                              setErrors(newErrors);
-                            }
-                            return;
-                          }
-                          // In feet mode, store raw input for free typing
-                          if (unitMode === "ft") {
-                            setRawInputs((prev) => ({
-                              ...prev,
-                              [section.id]: {
-                                ...prev[section.id],
-                                [dimension.id]: {
-                                  ...prev[section.id]?.[dimension.id],
-                                  width: value,
-                                },
-                              },
-                            }));
-                          }
-                          const numValue = Number(value);
-                          if (!isNaN(numValue)) {
-                            const mmValue =
-                              unitMode === "ft" ? feetToMm(numValue) : numValue;
-                            updateDimension(section.id, dimension.id, {
-                              width: mmValue,
-                            });
-                          }
-                          // Clear error when user starts typing
-                          if (errors[section.id]?.[dimension.id]?.width) {
-                            const newErrors = { ...errors };
-                            if (newErrors[section.id]?.[dimension.id]) {
-                              delete newErrors[section.id][dimension.id].width;
-                            }
-                            setErrors(newErrors);
-                          }
-                        }}
-                        onBlur={() => {
-                          // Clear raw input on blur to show formatted value
-                          if (unitMode === "ft") {
-                            setRawInputs((prev) => {
-                              const newInputs = { ...prev };
-                              if (newInputs[section.id]?.[dimension.id]) {
-                                delete newInputs[section.id][dimension.id]
-                                  .width;
-                              }
-                              return newInputs;
-                            });
-                          }
-                          // Validate on blur
-                          const validationResult = validateDimension(
-                            dimension,
-                            unitMode
-                          );
-                          if (!validationResult.isValid) {
-                            setErrors((prev) => ({
-                              ...prev,
-                              [section.id]: {
-                                ...prev[section.id],
-                                [dimension.id]: {
-                                  ...prev[section.id]?.[dimension.id],
-                                  ...validationResult.errors,
-                                },
-                              },
-                            }));
-                          } else {
-                            // Clear errors if valid
-                            setErrors((prev) => {
-                              const newErrors = { ...prev };
-                              if (newErrors[section.id]?.[dimension.id]) {
-                                delete newErrors[section.id][dimension.id]
-                                  .width;
-                                if (
-                                  Object.keys(
-                                    newErrors[section.id][dimension.id]
-                                  ).length === 0
-                                ) {
-                                  delete newErrors[section.id][dimension.id];
-                                }
-                              }
-                              return newErrors;
-                            });
-                          }
-                        }}
-                        className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent ${errors[section.id]?.[dimension.id]?.width
-                          ? "border-red-300"
-                          : "border-slate-300"
-                          }`}
-                      />
-                      {errors[section.id]?.[dimension.id]?.width && (
-                        <p className="mt-1 text-xs text-red-600">
-                          {errors[section.id][dimension.id].width}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-slate-600 mb-1">
-                        Quantity
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="100"
-                        value={
-                          dimension.quantity === null ? "" : dimension.quantity
-                        }
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          // Allow empty string for clearing
-                          if (value === "") {
-                            updateDimension(section.id, dimension.id, {
-                              quantity: null,
-                            });
-                            // Clear error when user clears
-                            if (errors[section.id]?.[dimension.id]?.quantity) {
-                              const newErrors = { ...errors };
-                              if (newErrors[section.id]?.[dimension.id]) {
-                                delete newErrors[section.id][dimension.id]
-                                  .quantity;
-                              }
-                              setErrors(newErrors);
-                            }
-                            return;
-                          }
-                          const numValue = Number(value);
-                          if (!isNaN(numValue)) {
-                            updateDimension(section.id, dimension.id, {
-                              quantity: numValue,
-                            });
-                            // Clear error when user starts typing
-                            if (errors[section.id]?.[dimension.id]?.quantity) {
-                              const newErrors = { ...errors };
-                              if (newErrors[section.id]?.[dimension.id]) {
-                                delete newErrors[section.id][dimension.id]
-                                  .quantity;
-                              }
-                              setErrors(newErrors);
-                            }
-                          }
-                        }}
-                        onBlur={() => {
-                          // Validate on blur using validation module
-                          const validationResult = validateDimension(
-                            dimension,
-                            unitMode
-                          );
-                          if (!validationResult.isValid) {
-                            setErrors((prev) => ({
-                              ...prev,
-                              [section.id]: {
-                                ...prev[section.id],
-                                [dimension.id]: {
-                                  ...prev[section.id]?.[dimension.id],
-                                  ...validationResult.errors,
-                                },
-                              },
-                            }));
-                          } else {
-                            // Clear errors if valid
-                            setErrors((prev) => {
-                              const newErrors = { ...prev };
-                              if (newErrors[section.id]?.[dimension.id]) {
-                                delete newErrors[section.id][dimension.id]
-                                  .quantity;
-                                if (
-                                  Object.keys(
-                                    newErrors[section.id][dimension.id]
-                                  ).length === 0
-                                ) {
-                                  delete newErrors[section.id][dimension.id];
-                                }
-                              }
-                              return newErrors;
-                            });
-                          }
-                        }}
-                        className={`w-full px-2 py-1.5 text-sm border rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent ${errors[section.id]?.[dimension.id]?.quantity
-                          ? "border-red-300"
-                          : "border-slate-300"
-                          }`}
-                      />
-                      {errors[section.id]?.[dimension.id]?.quantity && (
-                        <p className="mt-1 text-xs text-red-600">
-                          {errors[section.id][dimension.id].quantity}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {section.dimensions.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeDimension(section.id, dimension.id)}
-                      className="p-2 text-red-600 hover:bg-red-100 rounded transition-colors flex-shrink-0"
-                      title="Remove Dimension"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-
-        <button
-          type="button"
-          onClick={addSection}
-          className="w-full py-3 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-slate-400 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          Add Section
-        </button>
-
-        <div className="flex gap-3 pt-4">
-          <button
-            type="submit"
-            className="flex-1 bg-slate-700 text-white px-6 py-3 rounded-lg font-semibold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
-          >
-            <Calculator className="w-5 h-5" />
-            Calculate
-          </button>
-          <button
+          <Button
             type="button"
-            onClick={handleReset}
-            className="px-6 py-3 rounded-lg font-semibold border-2 border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2"
+            variant="outline"
+            onClick={addSection}
+            className="w-full border-dashed border-2 py-6 text-slate-500 hover:text-slate-700 hover:border-slate-400 hover:bg-slate-50"
           >
-            <RotateCcw className="w-5 h-5" />
-            Reset
-          </button>
-        </div>
-      </form>
+            <Plus className="w-5 h-5 mr-2" />
+            Add Another Section
+          </Button>
 
-      <div className="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
-        <p className="text-sm text-slate-600">
-          <span className="font-semibold">Section Type:</span> 27mm Domal
-        </p>
-        <p className="text-sm text-slate-600 mt-1">
-          <span className="font-semibold">Available Stock:</span> 12ft, 15ft,
-          16ft
-        </p>
-      </div>
-    </div>
+          <div className="flex gap-4 pt-4 border-t border-slate-100">
+            <Button
+              type="submit"
+              size="lg"
+              className="flex-1 bg-slate-800 hover:bg-slate-900 text-white shadow-md hover:shadow-lg transition-all"
+            >
+              <Calculator className="w-5 h-5 mr-2" />
+              Calculate Materials
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              onClick={handleReset}
+              className="min-w-[140px]"
+            >
+              <RotateCcw className="w-5 h-5 mr-2" />
+              Reset
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
