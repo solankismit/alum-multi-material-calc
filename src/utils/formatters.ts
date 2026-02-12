@@ -22,3 +22,12 @@ export function getWastageBadgeColor(percent: number): string {
   if (percent < 10) return "bg-yellow-100 text-yellow-800";
   return "bg-red-100 text-red-800";
 }
+
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}

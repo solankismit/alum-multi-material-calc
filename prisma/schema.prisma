@@ -114,4 +114,21 @@ model Worksheet {
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  quotations Quotation[]
+}
+
+model Quotation {
+  id          String    @id @default(uuid())
+  worksheetId String
+  worksheet   Worksheet @relation(fields: [worksheetId], references: [id], onDelete: Cascade)
+  
+  quotationNumber String? 
+  clientName      String?
+  pricingData Json
+  
+  totalAmount Float
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

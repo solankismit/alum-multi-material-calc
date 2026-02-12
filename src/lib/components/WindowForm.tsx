@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
+import WindowSchematic from "@/components/WindowSchematic";
 
 interface WindowFormProps {
   onCalculate: (input: WindowInput) => void;
@@ -316,87 +317,99 @@ export default function WindowForm({ onCalculate, onReset, initialValues }: Wind
               </div>
 
               <div className="grid md:grid-cols-2 gap-6 mb-6 pl-2">
-                <div className="space-y-3">
-                  <Label className="text-slate-600 font-medium">Track Type</Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        updateSection(section.id, {
-                          trackType: "2-track",
-                          configuration: "all-glass",
-                        });
-                      }}
-                      className={`h-12 border-2 ${section.trackType === "2-track"
-                          ? "border-slate-800 bg-slate-50 text-slate-900 ring-0"
-                          : "border-slate-100 text-slate-500 hover:border-slate-300"
-                        }`}
-                    >
-                      2-Track
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        updateSection(section.id, { trackType: "3-track" })
-                      }
-                      className={`h-12 border-2 ${section.trackType === "3-track"
-                          ? "border-slate-800 bg-slate-50 text-slate-900 ring-0"
-                          : "border-slate-100 text-slate-500 hover:border-slate-300"
-                        }`}
-                    >
-                      3-Track
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <Label className="text-slate-600 font-medium">Configuration</Label>
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        updateSection(section.id, { configuration: "all-glass" })
-                      }
-                      className={`justify-start border-2 ${section.configuration === "all-glass"
-                          ? "border-slate-800 bg-slate-50 text-slate-900 ring-0"
-                          : "border-slate-100 text-slate-500 hover:border-slate-300"
-                        }`}
-                    >
-                      <div className="w-2.5 h-2.5 rounded-full bg-slate-800 mr-3 opacity-0 data-[active=true]:opacity-100" data-active={section.configuration === "all-glass"} />
-                      All Glass
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        if (section.trackType === "2-track") {
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <Label className="text-slate-600 font-medium">Track Type</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
                           updateSection(section.id, {
                             trackType: "2-track",
                             configuration: "all-glass",
                           });
-                        } else {
-                          updateSection(section.id, {
-                            configuration: "glass-mosquito",
-                          });
-                        }
-                      }}
-                      disabled={section.trackType === "2-track"}
-                      className={`justify-start border-2 ${section.configuration === "glass-mosquito"
+                        }}
+                        className={`h-12 border-2 ${section.trackType === "2-track"
                           ? "border-slate-800 bg-slate-50 text-slate-900 ring-0"
                           : "border-slate-100 text-slate-500 hover:border-slate-300"
-                        } ${section.trackType === "2-track" ? "opacity-50 cursor-not-allowed bg-slate-50" : ""}`}
-                    >
-                      <div className="w-2.5 h-2.5 rounded-full bg-slate-800 mr-3 opacity-0 data-[active=true]:opacity-100" data-active={section.configuration === "glass-mosquito"} />
-                      Glass + Mosquito
-                      {section.trackType === "2-track" && (
-                        <span className="ml-auto text-xs text-slate-400 font-normal">
-                          (Not available)
-                        </span>
-                      )}
-                    </Button>
+                          }`}
+                      >
+                        2-Track
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          updateSection(section.id, { trackType: "3-track" })
+                        }
+                        className={`h-12 border-2 ${section.trackType === "3-track"
+                          ? "border-slate-800 bg-slate-50 text-slate-900 ring-0"
+                          : "border-slate-100 text-slate-500 hover:border-slate-300"
+                          }`}
+                      >
+                        3-Track
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-slate-600 font-medium">Configuration</Label>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          updateSection(section.id, { configuration: "all-glass" })
+                        }
+                        className={`justify-start border-2 ${section.configuration === "all-glass"
+                          ? "border-slate-800 bg-slate-50 text-slate-900 ring-0"
+                          : "border-slate-100 text-slate-500 hover:border-slate-300"
+                          }`}
+                      >
+                        <div className="w-2.5 h-2.5 rounded-full bg-slate-800 mr-3 opacity-0 data-[active=true]:opacity-100" data-active={section.configuration === "all-glass"} />
+                        All Glass
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          if (section.trackType === "2-track") {
+                            // allow switching but force track type change? 
+                            // No, just disable if invalid for 2-track
+                            return;
+                          } else {
+                            updateSection(section.id, {
+                              configuration: "glass-mosquito",
+                            });
+                          }
+                        }}
+                        disabled={section.trackType === "2-track"}
+                        className={`justify-start border-2 ${section.configuration === "glass-mosquito"
+                          ? "border-slate-800 bg-slate-50 text-slate-900 ring-0"
+                          : "border-slate-100 text-slate-500 hover:border-slate-300"
+                          } ${section.trackType === "2-track" ? "opacity-50 cursor-not-allowed bg-slate-50" : ""}`}
+                      >
+                        <div className="w-2.5 h-2.5 rounded-full bg-slate-800 mr-3 opacity-0 data-[active=true]:opacity-100" data-active={section.configuration === "glass-mosquito"} />
+                        Glass + Mosquito
+                        {section.trackType === "2-track" && (
+                          <span className="ml-auto text-xs text-slate-400 font-normal">
+                            (Not available)
+                          </span>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col space-y-3">
+                  <Label className="text-slate-600 font-medium">Visualization</Label>
+                  <div className="flex-1 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-center p-4">
+                    <WindowSchematic
+                      trackType={section.trackType}
+                      configuration={section.configuration}
+                      className="max-h-[220px] shadow-sm"
+                    />
                   </div>
                 </div>
               </div>

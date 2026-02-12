@@ -5,7 +5,21 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
-import { Trash2, FileText, ExternalLink, Plus } from "lucide-react";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/Dialog";
+import { Trash2, FileText, ExternalLink, Plus, Layers, ClipboardList } from "lucide-react";
+import { combineWorksheets } from "../worksheets/actions";
+
 
 interface Worksheet {
     id: string;
@@ -19,6 +33,12 @@ export default function WorksheetList() {
     const [worksheets, setWorksheets] = useState<Worksheet[]>([]);
     const [loading, setLoading] = useState(true);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+    // Combine Dialog State
+    const [isCombineOpen, setIsCombineOpen] = useState(false);
+    const [newWorksheetName, setNewWorksheetName] = useState("");
+    const [isCombining, setIsCombining] = useState(false);
 
     useEffect(() => {
         fetchWorksheets();
@@ -49,6 +69,7 @@ export default function WorksheetList() {
 
             if (res.ok) {
                 setWorksheets((prev) => prev.filter((w) => w.id !== id));
+                setSelectedIds((prev) => prev.filter((i) => i !== id));
             } else {
                 alert("Failed to delete worksheet");
             }
@@ -56,6 +77,51 @@ export default function WorksheetList() {
             console.error("Error deleting worksheet", error);
         } finally {
             setDeletingId(null);
+        }
+    };
+
+    // Selection Logic
+    const toggleSelect = (id: string) => {
+        setSelectedIds((prev) =>
+            prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+        );
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.length === worksheets.length) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(worksheets.map((w) => w.id));
+        }
+    };
+
+    const handleOrderbook = () => {
+        if (selectedIds.length === 0) return;
+        const ids = selectedIds.join(",");
+        router.push(`/worksheets/orderbook?ids=${ids}`);
+    };
+
+    const handleCombineTrigger = () => {
+        setNewWorksheetName(`Combined Worksheet - ${new Date().toLocaleDateString()}`);
+        setIsCombineOpen(true);
+    };
+
+    const handleCombineSubmit = async () => {
+        if (!newWorksheetName.trim()) return;
+        setIsCombining(true);
+        try {
+            // Server action call
+            const result = await combineWorksheets(selectedIds, newWorksheetName);
+            if (result.success && result.id) {
+                router.push(`/worksheets/${result.id}`);
+            } else {
+                alert("Failed to combine worksheets: " + (result.error || "Unknown error"));
+                setIsCombining(false);
+            }
+        } catch (error) {
+            console.error("Combine error:", error);
+            alert("An error occurred while combining.");
+            setIsCombining(false);
         }
     };
 
@@ -86,7 +152,7 @@ export default function WorksheetList() {
     }
 
     return (
-        <Card>
+        <Card className="relative">
             <CardHeader>
                 <div className="flex items-center justify-between">
                     <div>
@@ -101,11 +167,18 @@ export default function WorksheetList() {
                     </Link>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pb-24">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                         <thead className="text-gray-500 border-b">
                             <tr>
+                                <th className="py-3 px-4 w-10">
+                                    <Checkbox
+                                        checked={worksheets.length > 0 && selectedIds.length === worksheets.length}
+                                        onCheckedChange={toggleSelectAll}
+                                        aria-label="Select all"
+                                    />
+                                </th>
                                 <th className="py-3 px-4 font-medium">Name</th>
                                 <th className="py-3 px-4 font-medium">Last Modified</th>
                                 <th className="py-3 px-4 font-medium text-right">Actions</th>
@@ -113,7 +186,14 @@ export default function WorksheetList() {
                         </thead>
                         <tbody>
                             {worksheets.map((worksheet) => (
-                                <tr key={worksheet.id} className="border-b last:border-0 hover:bg-gray-50">
+                                <tr key={worksheet.id} className={`border-b last:border-0 hover:bg-gray-50 ${selectedIds.includes(worksheet.id) ? "bg-indigo-50/50" : ""}`}>
+                                    <td className="py-3 px-4">
+                                        <Checkbox
+                                            checked={selectedIds.includes(worksheet.id)}
+                                            onCheckedChange={() => toggleSelect(worksheet.id)}
+                                            aria-label={`Select ${worksheet.name}`}
+                                        />
+                                    </td>
                                     <td className="py-3 px-4 font-medium text-gray-900">
                                         <Link href={`/worksheets/${worksheet.id}`} className="hover:underline flex items-center">
                                             <FileText className="w-4 h-4 mr-2 text-indigo-500" />
@@ -149,6 +229,61 @@ export default function WorksheetList() {
                     </table>
                 </div>
             </CardContent>
+
+            {/* Batch Actions Bar */}
+            {selectedIds.length > 0 && (
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-4 animate-in slide-in-from-bottom-5 fade-in duration-300 z-10 w-[90%] max-w-xl justify-between">
+                    <span className="text-sm font-medium">{selectedIds.length} selected</span>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleCombineTrigger}
+                            className="!bg-indigo-600 hover:bg-indigo-700 text-white border-none"
+                        >
+                            <Layers className="w-4 h-4 mr-2" />
+                            Combine
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleOrderbook}
+                            className="bg-white text-slate-900 hover:bg-slate-100"
+                        >
+                            <ClipboardList className="w-4 h-4 mr-2" />
+                            Orderbook
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {/* Combine Dialog */}
+            <Dialog open={isCombineOpen} onOpenChange={setIsCombineOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Combine Worksheets</DialogTitle>
+                        <DialogDescription>
+                            Create a new worksheet containing all sections from the {selectedIds.length} selected worksheets.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input
+                            label="New Worksheet Name"
+                            value={newWorksheetName}
+                            onChange={(e) => setNewWorksheetName(e.target.value)}
+                            placeholder="e.g. Combined Project A"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsCombineOpen(false)} disabled={isCombining}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleCombineSubmit} disabled={isCombining || !newWorksheetName.trim()} isLoading={isCombining}>
+                            {isCombining ? "Combining..." : "Combine & Save"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Card>
     );
 }
