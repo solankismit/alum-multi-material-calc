@@ -38,9 +38,12 @@ testCases.forEach((test, index) => {
         glassHeightDeduction: 104.775,
         frameMultiplierW: 2,
         frameMultiplierH: 2,
+        trackRailDeduction: 0,
+        separateMosquitoNet: false,
+        differentFrameMaterials: false,
         createdAt: new Date(),
         updatedAt: new Date()
-    };
+    } as SectionConfiguration;
 
     const sectionConfig = getSectionConfig(mockConfig);
     const dims = sectionConfig.calculateFinalDimensions(test.width, test.height);

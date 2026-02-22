@@ -11,7 +11,7 @@ const COOKIE_NAME = "session";
 // 7 days in ms
 const EXPIRATION_TIME = 7 * 24 * 60 * 60 * 1000;
 
-export async function encrypt(payload: any) {
+export async function encrypt(payload: import('jose').JWTPayload) {
     return new SignJWT(payload)
         .setProtectedHeader({ alg: "HS256" })
         .setIssuedAt()

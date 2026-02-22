@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { verifySession } from "@/lib/session";
-import { WindowInput, CalculationResult } from "@/types";
+import { WindowInput, CalculationResult, MaterialStockMap } from "@/types";
 import { calculateMaterials } from "@/utils/calculations";
 
 export async function combineWorksheets(worksheetIds: string[], newName: string) {
@@ -50,36 +50,23 @@ export async function combineWorksheets(worksheetIds: string[], newName: string)
         }
 
         // 3. Fetch configs and stock options for recalculation
-        const [configs, stockLengths] = await Promise.all([
-            db.sectionConfiguration.findMany({
-                include: { sectionType: true }
-            }),
-            db.stockLength.findMany({
-                where: { isActive: true },
-                include: { sectionType: true }
-            })
-        ]);
-
-        // Transform StockLength to StockOption if needed
-        const stockOptions = stockLengths.map(sl => ({
-            length: sl.length,
-            name: sl.sectionType.name,
-            lengthFeet: sl.lengthFeet
-        }));
+        const allSections = await db.sectionType.findMany({
+            include: { configurations: true }
+        });
 
         // 4. Recalculate
         const mergedInput: WindowInput = { sections: mergedSections };
-        const calculationResult = calculateMaterials(mergedInput, configs, stockOptions);
+        const calculationResult = calculateMaterials(mergedInput, allSections);
 
         // 5. Save new worksheet
         const newWorksheet = await db.worksheet.create({
             data: {
                 userId: session.userId,
                 name: newName,
-                data: {
+                data: JSON.parse(JSON.stringify({
                     input: mergedInput,
                     result: calculationResult
-                }
+                }))
             }
         });
 

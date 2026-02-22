@@ -3,6 +3,7 @@ import type {
   WindowDimension,
   DimensionGlassInfo,
   StockOption,
+  MaterialStockMap
 } from "../types";
 import {
   optimizeStockUsage,
@@ -12,6 +13,7 @@ import {
 import { getSectionConfig, type Configuration } from "./sectionConfig";
 import { filterValidDimensions } from "./dimensionValidation";
 import { mmToFeet } from "./formatters";
+import { SectionConfiguration } from "@prisma/client";
 
 interface PieceCount {
   length: number;
@@ -83,6 +85,15 @@ function calculateShutterPieces(
       count: 2 * numberOfShutters * quantity,
     });
 
+    // If separateMosquitoNet is true and config is glass-mosquito:
+    // Glass usually gets 4H, 4W (per window) for a 3-track or 2-track with mosquito?
+    // Wait, the PR says: "generate separate Glass (4H/4W) and Mosquito (2H/2W) pieces if checked"
+    // Let's pass `separateMosquitoNet` into `createShutterMaterial` instead of splitting it here in piece calculation,
+    // because `calculateShutterPieces` just calculates base width/height.
+    // Actually, `calculateShutterPieces` returns the *total* pieces as if they are same material.
+    // If separate, we need to return `glassHeightPieces`, `glassWidthPieces`, `mosquitoHeightPieces`, `mosquitoWidthPieces`.
+    // Let's modify `calculateShutterPieces` later, or just do it in `createShutterMaterial`.
+    // Let's just pass `sectionConfigData` into the create functions from `calculateSectionMaterials`.
     widthPieces.push({
       length: finalDimensions.shutterWidth,
       count: 2 * numberOfShutters * quantity,
@@ -143,90 +154,130 @@ function calculateAccessories(
   };
 }
 
-/**
- * Creates frame material requirement
- */
-/**
- * Creates frame material requirement
- */
 function createFrameMaterial(
   widthPieces: PieceCount[],
   heightPieces: PieceCount[],
-  stockOptions?: StockOption[]
-): MaterialRequirement {
+  differentFrameMaterials: boolean,
+  stockMap?: MaterialStockMap
+): MaterialRequirement[] {
+  if (differentFrameMaterials) {
+    const frameWidthReqs: PieceRequirement[] = widthPieces.map((p) => ({
+      length: p.length, count: p.count, type: `width-${p.length}`
+    }));
+    const frameHeightReqs: PieceRequirement[] = heightPieces.map((p) => ({
+      length: p.length, count: p.count, type: `height-${p.length}`
+    }));
+
+    const widthBreakdown = optimizeCombinedStockUsage(frameWidthReqs, stockMap?.['frameWidth']);
+    const heightBreakdown = optimizeCombinedStockUsage(frameHeightReqs, stockMap?.['frameHeight']);
+
+    return [
+      {
+        component: "Frame (Width)",
+        totalRequired: widthPieces.reduce((sum, p) => sum + p.length * p.count, 0),
+        stockBreakdown: widthBreakdown,
+        description: `Frame Widths: ${widthPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")}`,
+      },
+      {
+        component: "Frame (Height)",
+        totalRequired: heightPieces.reduce((sum, p) => sum + p.length * p.count, 0),
+        stockBreakdown: heightBreakdown,
+        description: `Frame Heights: ${heightPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")}`,
+      }
+    ];
+  }
+
+  // Combined (default)
   const framePieceRequirements: PieceRequirement[] = [
-    ...widthPieces.map((p) => ({
-      length: p.length,
-      count: p.count,
-      type: `width-${p.length}`,
-    })),
-    ...heightPieces.map((p) => ({
-      length: p.length,
-      count: p.count,
-      type: `height-${p.length}`,
-    })),
+    ...widthPieces.map((p) => ({ length: p.length, count: p.count, type: `width-${p.length}` })),
+    ...heightPieces.map((p) => ({ length: p.length, count: p.count, type: `height-${p.length}` })),
   ];
 
-  const frameBreakdown = optimizeCombinedStockUsage(framePieceRequirements, stockOptions);
-  const frameTotal =
-    widthPieces.reduce((sum, p) => sum + p.length * p.count, 0) +
-    heightPieces.reduce((sum, p) => sum + p.length * p.count, 0);
+  const frameBreakdown = optimizeCombinedStockUsage(framePieceRequirements, stockMap?.['frameWidth']);
+  const frameTotal = widthPieces.reduce((sum, p) => sum + p.length * p.count, 0) + heightPieces.reduce((sum, p) => sum + p.length * p.count, 0);
 
-  const frameWidthDesc = widthPieces
-    .map((p) => `${p.count}×${mmToFeet(p.length)}ft`)
-    .join(" + ");
-  const frameHeightDesc = heightPieces
-    .map((p) => `${p.count}×${mmToFeet(p.length)}ft`)
-    .join(" + ");
+  const frameWidthDesc = widthPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ");
+  const frameHeightDesc = heightPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ");
 
-  return {
+  return [{
     component: "Frame (Combined)",
     totalRequired: frameTotal,
     stockBreakdown: frameBreakdown,
     description: `Frame: ${frameWidthDesc} width + ${frameHeightDesc} height`,
-  };
+  }];
 }
 
-/**
- * Creates shutter material requirement
- */
 function createShutterMaterial(
-  heightPieces: PieceCount[],
-  widthPieces: PieceCount[],
-  shutterLabel: string,
-  stockOptions?: StockOption[]
-): MaterialRequirement {
+  dimensions: WindowDimension[],
+  sectionConfig: ReturnType<typeof getSectionConfig>,
+  sectionConfigData: SectionConfiguration,
+  stockMap?: MaterialStockMap
+): MaterialRequirement[] {
+  const { configuration } = sectionConfig;
+  const separateMosquito = sectionConfigData.separateMosquitoNet && configuration === "glass-mosquito";
+
+  if (separateMosquito) {
+    // 2 shutters mosquito (2H, 2W per window)
+    // N shutters glass (e.g. 2 for 2-track, 4 for 3-track? wait, 3-track has 2 glass 1 mosquito usually)
+    // PR states: Glass (4H/4W) and Mosquito (2H/2W)
+    const glassHeightPieces: PieceCount[] = [];
+    const glassWidthPieces: PieceCount[] = [];
+    const mosquitoHeightPieces: PieceCount[] = [];
+    const mosquitoWidthPieces: PieceCount[] = [];
+
+    dimensions.forEach(dim => {
+      if (!dim.quantity || !dim.width || !dim.height) return;
+      const finalDims = sectionConfig.calculateFinalDimensions(dim.width, dim.height);
+
+      // Mosquito
+      mosquitoHeightPieces.push({ length: finalDims.height, count: 2 * dim.quantity });
+      mosquitoWidthPieces.push({ length: finalDims.shutterWidth, count: 2 * dim.quantity });
+
+      // Glass (assuming the rest of the shutters are glass. 3-track = 3 shutters -> 1 mosq, 2 glass = 4 pieces)
+      const glassShuttersCount = sectionConfig.numberOfShutters - 1;
+      glassHeightPieces.push({ length: finalDims.height, count: 2 * glassShuttersCount * dim.quantity });
+      glassWidthPieces.push({ length: finalDims.shutterWidth, count: 2 * glassShuttersCount * dim.quantity });
+    });
+
+    const glassReqs = [
+      ...glassHeightPieces.map(p => ({ length: p.length, count: p.count, type: `g-height-${p.length}` })),
+      ...glassWidthPieces.map(p => ({ length: p.length, count: p.count, type: `g-width-${p.length}` }))
+    ];
+    const mosqReqs = [
+      ...mosquitoHeightPieces.map(p => ({ length: p.length, count: p.count, type: `m-height-${p.length}` })),
+      ...mosquitoWidthPieces.map(p => ({ length: p.length, count: p.count, type: `m-width-${p.length}` }))
+    ];
+
+    return [
+      {
+        component: "Shutter - Glass",
+        totalRequired: glassReqs.reduce((sum, p) => sum + p.length * p.count, 0),
+        stockBreakdown: optimizeCombinedStockUsage(glassReqs, stockMap?.['shutterGlass']),
+        description: `Shutter Glass: ${glassHeightPieces[0]?.count || 0}H + ${glassWidthPieces[0]?.count || 0}W`,
+      },
+      {
+        component: "Shutter - Mosquito",
+        totalRequired: mosqReqs.reduce((sum, p) => sum + p.length * p.count, 0),
+        stockBreakdown: optimizeCombinedStockUsage(mosqReqs, stockMap?.['shutterMosquito']),
+        description: `Shutter Mosquito: ${mosquitoHeightPieces[0]?.count || 0}H + ${mosquitoWidthPieces[0]?.count || 0}W`,
+      }
+    ];
+  }
+
+  // Combined fallback
+  const { heightPieces, widthPieces } = calculateShutterPieces(
+    dimensions, sectionConfig.numberOfShutters, sectionConfig.calculateFinalDimensions, configuration as Configuration
+  );
   const shutterPieceRequirements: PieceRequirement[] = [
-    ...heightPieces.map((p) => ({
-      length: p.length,
-      count: p.count,
-      type: `height-${p.length}`,
-    })),
-    ...widthPieces.map((p) => ({
-      length: p.length,
-      count: p.count,
-      type: `width-${p.length}`,
-    })),
+    ...heightPieces.map((p) => ({ length: p.length, count: p.count, type: `height-${p.length}` })),
+    ...widthPieces.map((p) => ({ length: p.length, count: p.count, type: `width-${p.length}` })),
   ];
-
-  const shutterBreakdown = optimizeCombinedStockUsage(shutterPieceRequirements, stockOptions);
-  const shutterTotal =
-    heightPieces.reduce((sum, p) => sum + p.length * p.count, 0) +
-    widthPieces.reduce((sum, p) => sum + p.length * p.count, 0);
-
-  const shutterHeightDesc = heightPieces
-    .map((p) => `${p.count}×${mmToFeet(p.length)}ft`)
-    .join(" + ");
-  const shutterWidthDesc = widthPieces
-    .map((p) => `${p.count}×${mmToFeet(p.length)}ft`)
-    .join(" + ");
-
-  return {
-    component: `Shutter (Combined) - ${shutterLabel}`,
-    totalRequired: shutterTotal,
-    stockBreakdown: shutterBreakdown,
-    description: `Shutter: ${shutterHeightDesc} height + ${shutterWidthDesc} width`,
-  };
+  return [{
+    component: `Shutter (Combined) - ${sectionConfig.getShutterLabel()}`,
+    totalRequired: shutterPieceRequirements.reduce((sum, p) => sum + p.length * p.count, 0),
+    stockBreakdown: optimizeCombinedStockUsage(shutterPieceRequirements, stockMap?.['shutterGlass']),
+    description: `Shutter: ${heightPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")} H + ${widthPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")} W`,
+  }];
 }
 
 /**
@@ -270,15 +321,34 @@ function createInterlockMaterial(
     component: "Interlock",
     totalRequired: interlockTotal,
     stockBreakdown: interlockBreakdown,
-    description:
-      trackType === "2-track"
-        ? `Interlock clips (intersection): ${interlockDesc}`
-        : `Interlock clips: ${interlockDesc}`,
+    description: `Interlock clips: ${interlockDesc}`,
+  };
+}
+
+function createTrackRailMaterial(
+  dimensions: WindowDimension[],
+  calculateTrackRailPieces: (w: number, q: number) => { length: number; count: number },
+  stockOptions?: StockOption[]
+): MaterialRequirement | null {
+  const pieces: PieceCount[] = [];
+  dimensions.forEach(dim => {
+    if (!dim.quantity || !dim.width) return;
+    pieces.push(calculateTrackRailPieces(dim.width, dim.quantity));
+  });
+
+  if (pieces.length === 0 || pieces[0].length <= 0) return null;
+
+  const reqs = pieces.map(p => ({ length: p.length, count: p.count, type: `track-${p.length}` }));
+  return {
+    component: "Track Rail",
+    totalRequired: pieces.reduce((sum, p) => sum + p.length * p.count, 0),
+    stockBreakdown: optimizeCombinedStockUsage(reqs, stockOptions),
+    description: `Track Rails: ${pieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")}`,
   };
 }
 
 
-import { SectionConfiguration } from "@prisma/client";
+
 
 /**
  * Calculates materials for a section
@@ -290,7 +360,7 @@ export function calculateSectionMaterials(
     configuration: "all-glass" | "glass-mosquito";
   },
   sectionConfigData: SectionConfiguration,
-  stockOptions?: StockOption[]
+  stockMap?: MaterialStockMap
 ): SectionMaterialsResult {
   const { trackType, configuration, dimensions } = section;
 
@@ -325,20 +395,10 @@ export function calculateSectionMaterials(
 
   // Calculate frame pieces
   const { widthPieces, heightPieces } = calculateFramePieces(validDimensions);
-  materials.push(createFrameMaterial(widthPieces, heightPieces, stockOptions));
+  materials.push(...createFrameMaterial(widthPieces, heightPieces, sectionConfigData.differentFrameMaterials, stockMap));
 
-  // Calculate shutter pieces (using single source of truth for final dimensions)
-  const { heightPieces: shutterHeightPieces, widthPieces: shutterWidthPieces } =
-    calculateShutterPieces(
-      validDimensions,
-      sectionConfig.numberOfShutters,
-      sectionConfig.calculateFinalDimensions,
-      configuration
-    );
-  const shutterLabel = sectionConfig.getShutterLabel();
-  materials.push(
-    createShutterMaterial(shutterHeightPieces, shutterWidthPieces, shutterLabel, stockOptions)
-  );
+  // Calculate shutter pieces
+  materials.push(...createShutterMaterial(validDimensions, sectionConfig, sectionConfigData, stockMap));
 
   // Calculate interlock pieces
   const interlockPieces = calculateInterlockPieces(
@@ -346,7 +406,11 @@ export function calculateSectionMaterials(
     sectionConfig.calculateInterlockLength,
     sectionConfig.calculateInterlockCount
   );
-  materials.push(createInterlockMaterial(interlockPieces, trackType, stockOptions));
+  materials.push(createInterlockMaterial(interlockPieces, trackType, stockMap?.['interlock']));
+
+  // Calculate track rail pieces
+  const trackRailMat = createTrackRailMaterial(validDimensions, sectionConfig.calculateTrackRailPieces, stockMap?.['trackRail']);
+  if (trackRailMat) materials.push(trackRailMat);
 
   // Calculate accessories
   const accessories = calculateAccessories(

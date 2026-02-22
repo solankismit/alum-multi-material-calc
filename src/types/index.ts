@@ -1,3 +1,9 @@
+import { SectionType, SectionConfiguration } from "@prisma/client";
+
+export type SectionWithConfigs = SectionType & {
+  configurations: SectionConfiguration[];
+};
+
 export interface WindowDimension {
   id: string;
   height: number | null;
@@ -7,10 +13,13 @@ export interface WindowDimension {
 
 export interface WindowSection {
   id: string;
+  sectionTypeId?: string; // Links back to the SectionType in the DB
   name: string;
   dimensions: WindowDimension[];
   trackType: "2-track" | "3-track";
   configuration: "all-glass" | "glass-mosquito";
+  mosquitoMeshGrade?: string; // e.g. "304 SS", "Fiber"
+  stockMap?: MaterialStockMap;
 }
 
 export interface WindowInput {
@@ -22,6 +31,10 @@ export interface StockOption {
   name: string;
   lengthFeet: number;
 }
+
+export type MaterialStockMap = {
+  [key: string]: StockOption[];
+};
 
 export interface PieceInfo {
   length: number;
@@ -82,6 +95,7 @@ export interface GlassSize {
 export interface SectionResult {
   sectionId: string;
   sectionName: string;
+  sectionTypeName?: string;
   materials: MaterialRequirement[];
   accessories: {
     mosquitoCChannel: number;
@@ -93,6 +107,8 @@ export interface SectionResult {
     totalStockUsed: number;
     totalWastage: number;
     wastagePercent: number;
+    totalGlassArea?: number;
+    totalMosquitoArea?: number;
     stockSummary: {
       [key: string]: number;
     };
@@ -129,6 +145,7 @@ export interface CalculationResult {
     totalWastage: number;
     wastagePercent: number;
     totalGlassArea: number; // mm²
+    totalMosquitoArea?: number; // mm²
     stockSummary: {
       [key: string]: number;
     };

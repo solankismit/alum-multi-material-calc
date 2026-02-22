@@ -64,7 +64,7 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
 
         {/* Total Glass Area */}
         {result.combinedSummary.totalGlassArea > 0 && (
-          <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg p-3 mb-4 border border-cyan-200">
+          <div className="bg-linear-to-r from-cyan-50 to-blue-50 rounded-lg p-3 mb-4 border border-cyan-200">
             <div className="flex items-center gap-2 mb-2">
               <Square className="w-4 h-4 text-cyan-700" />
               <h4 className="text-sm font-semibold text-cyan-900">
@@ -141,11 +141,20 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
               onClick={() => toggleSection(sectionKey)}
               className="flex items-center justify-between w-full mb-4"
             >
-              <div className="flex items-center gap-2">
-                <Scissors className="w-5 h-5 text-slate-700" />
-                <h3 className="text-lg font-semibold text-slate-800">
-                  {sectionResult.sectionName}
-                </h3>
+              <div className="flex items-center gap-3">
+                <div className="bg-indigo-100 p-2 rounded-lg">
+                  <Scissors className="w-5 h-5 text-indigo-700" />
+                </div>
+                <div className="text-left">
+                  <h3 className="text-xl font-bold text-slate-900 border-b-2 border-indigo-200 pb-1 inline-block">
+                    {sectionResult.sectionName}
+                  </h3>
+                  {sectionResult.sectionTypeName && (
+                    <p className="text-xs text-slate-500 mt-1 uppercase tracking-wide font-semibold">
+                      System: {sectionResult.sectionTypeName}
+                    </p>
+                  )}
+                </div>
               </div>
               {isExpanded ? (
                 <ChevronUp className="w-5 h-5 text-slate-600" />
@@ -240,7 +249,7 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
 
                 {/* Glass Sizes */}
                 {sectionResult.glassInfo.length > 0 && (
-                  <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg p-3 mb-4 border border-cyan-200">
+                  <div className="bg-linear-to-r from-cyan-50 to-blue-50 rounded-lg p-3 mb-4 border border-cyan-200">
                     <div className="flex items-center gap-2 mb-3">
                       <Square className="w-4 h-4 text-cyan-700" />
                       <h4 className="text-sm font-semibold text-cyan-900">
@@ -360,7 +369,7 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
       })}
 
       {/* Combined Order Summary */}
-      <div className="bg-gradient-to-r from-slate-700 to-slate-800 rounded-xl shadow-lg p-4 text-white">
+      <div className="bg-linear-to-r from-slate-700 to-slate-800 rounded-xl shadow-lg p-4 text-white">
         <h3 className="text-sm font-semibold mb-3">Order Summary</h3>
         <div className="space-y-1.5 text-xs">
           <div className="flex justify-between">

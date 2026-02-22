@@ -17,10 +17,9 @@ const sectionUpdateSchema = z.object({
         threeTrackWidthAddition: z.number(),
         glassWidthDeduction: z.number(),
         glassHeightDeduction: z.number(),
-    })),
-    stockLengths: z.array(z.object({
-        length: z.number(),
-        lengthFeet: z.number(),
+        trackRailDeduction: z.number().default(0),
+        separateMosquitoNet: z.boolean().default(false),
+        differentFrameMaterials: z.boolean().default(false),
     })),
 });
 
@@ -39,7 +38,6 @@ export async function GET(
             where: { id },
             include: {
                 configurations: true,
-                stockLengths: true,
             },
         });
 
@@ -103,7 +101,7 @@ export async function PUT(
             );
         }
 
-        const { name, isActive, trackTypes, configs, configurations, stockLengths } = result.data;
+        const { name, isActive, trackTypes, configs, configurations } = result.data;
 
         // Full replacement of relations for simplicity (delete all -> create all)
         // In a real production app with massive data, we'd do differential updates.
@@ -117,18 +115,25 @@ export async function PUT(
             // Replace configs
             await tx.sectionConfiguration.deleteMany({ where: { sectionTypeId: id } });
             await tx.sectionConfiguration.createMany({
-                data: configurations.map(c => ({ ...c, sectionTypeId: id }))
+                data: configurations.map(c => ({
+                    ...c,
+                    sectionTypeId: id,
+                    shutterWidthDeduction: Number(c.shutterWidthDeduction),
+                    heightDeduction: Number(c.heightDeduction),
+                    threeTrackWidthAddition: Number(c.threeTrackWidthAddition),
+                    glassWidthDeduction: Number(c.glassWidthDeduction),
+                    glassHeightDeduction: Number(c.glassHeightDeduction),
+                    trackRailDeduction: Number(c.trackRailDeduction || 0),
+                    separateMosquitoNet: Boolean(c.separateMosquitoNet),
+                    differentFrameMaterials: Boolean(c.differentFrameMaterials),
+                }))
             });
 
-            // Replace stock lengths
-            await tx.stockLength.deleteMany({ where: { sectionTypeId: id } });
-            await tx.stockLength.createMany({
-                data: stockLengths.map(s => ({ ...s, sectionTypeId: id, isActive: true }))
-            });
+
 
             return await tx.sectionType.findUnique({
                 where: { id },
-                include: { configurations: true, stockLengths: true }
+                include: { configurations: true }
             });
         });
 

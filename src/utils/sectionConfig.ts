@@ -38,6 +38,7 @@ export interface SectionTypeConfig {
     trackCap: number;
   };
   getShutterLabel: () => string;
+  calculateTrackRailPieces: (sectionWidth: number, quantity: number) => { length: number; count: number };
   calculateGlassSize: (
     sectionWidth: number,
     sectionHeight: number,
@@ -90,13 +91,22 @@ export function getSectionConfig(
     numberOfShutters,
     calculateFinalDimensions,
     calculateInterlockLength: (height: number) => {
-      // Using multiplier from DB if available, otherwise fallback to standard logic
-      // Standard logic: 2-track = height * 2, 3-track = height * 1
-      // Ideally this should be configurable in DB too, but for now keeping logic consistent
-      return trackType === "2-track" ? height * 2 : height;
+      // PR states "Length = shutter height." The final shutter height IS finalDimensions.height
+      return calculateFinalDimensions(0, height).height;
     },
     calculateInterlockCount: (quantity: number) => {
-      return trackType === "2-track" ? quantity : numberOfShutters * quantity;
+      // PR states "Base interlock count on number of shutters per section height" Check if interlocks = shutters? Yes
+      return numberOfShutters * quantity;
+    },
+    calculateTrackRailPieces: (sectionWidth: number, quantity: number) => {
+      // Track Rail Calculation
+      // Quantity = 2 (for 2-track) or 3 (for 3-track) per window * total quantity
+      // Length = sectionWidth - trackRailDeduction
+      const countPerWindow = trackType === "3-track" ? 3 : 2;
+      return {
+        length: sectionWidth - (dbConfig.trackRailDeduction || 0),
+        count: countPerWindow * quantity
+      };
     },
     calculateAccessories: (quantity: number) => {
       return {

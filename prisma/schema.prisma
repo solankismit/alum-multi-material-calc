@@ -63,6 +63,11 @@ model SectionConfiguration {
   threeTrackWidthAddition  Float // width adjustment for 3-track 3-glass (was z)
   glassWidthDeduction      Float // glass width deduction (was a)
   glassHeightDeduction     Float // glass height deduction (was b)
+  trackRailDeduction       Float @default(0) // width deduction for track rail
+
+  // Feature Flags
+  separateMosquitoNet     Boolean @default(false)
+  differentFrameMaterials Boolean @default(false)
   
   // Multipliers for Frame/Interlock calculation
   frameMultiplierW Float @default(2)

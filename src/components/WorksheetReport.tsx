@@ -180,6 +180,13 @@ export default function WorksheetReport({
                                     value={`${totalGlassAreaSqFt.toFixed(2)} sq.ft`}
                                     subValue="Across all sections"
                                 />
+                                {result.combinedSummary.totalMosquitoArea !== undefined && result.combinedSummary.totalMosquitoArea > 0 && (
+                                    <SummaryCard
+                                        title="Total Mosquito Area"
+                                        value={`${(result.combinedSummary.totalMosquitoArea / 92903).toFixed(2)} sq.ft`}
+                                        subValue="Across all sections"
+                                    />
+                                )}
                                 <SummaryCard
                                     title="Total Wastage"
                                     value={`${totalWastageFt.toFixed(1)} ft`}
@@ -197,9 +204,9 @@ export default function WorksheetReport({
                         {result.sectionResults.map((secResult, sIdx) => (
                             <div key={sIdx} className="space-y-8 print:break-before-page">
 
-                                <div className="bg-slate-50 p-4 border-l-4 border-indigo-600 print:bg-transparent print:border-l-0 print:border-b-2 print:border-black">
-                                    <h2 className="text-2xl font-bold text-slate-900">{secResult.sectionName}</h2>
-                                    <p className="text-slate-500 text-sm mt-1">Section Details & Cutting Lists</p>
+                                <div className="bg-indigo-50 p-5 rounded-r-xl border-l-4 border-indigo-600 shadow-sm mb-6 print:bg-transparent print:border-l-0 print:shadow-none print:p-0 print:mb-4 print:border-b-2 print:border-black">
+                                    <h2 className="text-3xl font-black text-indigo-950 uppercase tracking-tight">{secResult.sectionName}</h2>
+                                    <p className="text-indigo-700/80 font-semibold text-sm mt-1 uppercase tracking-wider">{secResult.sectionTypeName ? `System: ${secResult.sectionTypeName} • ` : ""}Section Details & Cutting Lists</p>
                                 </div>
 
                                 {/* A. Section Glass Order */}
@@ -244,7 +251,7 @@ export default function WorksheetReport({
                                 </section>
 
                                 {/* B. Material Optimization Categorized */}
-                                {["Frame", "Shutter", "Interlock"].map(category => {
+                                {["Frame", "Shutter", "Interlock", "Track Rail"].map(category => {
                                     const categoryMaterials = secResult.materials.filter(m => m.component.includes(category));
                                     if (categoryMaterials.length === 0) return null;
 
@@ -273,7 +280,7 @@ export default function WorksheetReport({
                                                                     <div key={pIdx} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center text-sm border-b border-slate-100 last:border-0 pb-4 last:pb-0">
 
                                                                         {/* Multiplier Badge */}
-                                                                        <div className="flex-shrink-0 w-16 text-center">
+                                                                        <div className="shrink-0 w-16 text-center">
                                                                             <span className="inline-block bg-slate-900 text-white text-lg font-bold px-3 py-1 rounded shadow-sm">
                                                                                 {plan.count}x
                                                                             </span>
@@ -290,6 +297,8 @@ export default function WorksheetReport({
                                                                                     let colorClass = "bg-indigo-200 text-indigo-900 border-indigo-300"; // default height
                                                                                     if (type.includes("width")) colorClass = "bg-emerald-200 text-emerald-900 border-emerald-300";
                                                                                     if (type.includes("interlock")) colorClass = "bg-amber-200 text-amber-900 border-amber-300";
+                                                                                    if (type.includes("m-height") || type.includes("m-width")) colorClass = "bg-rose-200 text-rose-900 border-rose-300";
+                                                                                    if (type.includes("track")) colorClass = "bg-cyan-200 text-cyan-900 border-cyan-300";
 
                                                                                     return (
                                                                                         <div

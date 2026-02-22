@@ -37,8 +37,8 @@ export default async function QuotationView({ params }: PageProps) {
 
                 {/* Header Actions (Hidden continuously in print) */}
                 <div className="print:hidden flex justify-between mb-8">
-                    <Button variant="outline" asChild>
-                        <a href="/dashboard">Back to Dashboard</a>
+                    <Button variant="outline" onClick={() => window.location.href = '/dashboard'}>
+                        Back to Dashboard
                     </Button>
                     <ClientPrintButton />
                 </div>

@@ -7,6 +7,7 @@ export interface MaterialSummary {
   totalWastage: number;
   wastagePercent: number;
   totalGlassArea: number;
+  totalMosquitoArea?: number;
   stockSummary: { [key: string]: number };
   wastagePiecesSummary: { [key: string]: number };
   frameStockSummary: { [key: string]: number };
@@ -190,6 +191,7 @@ export function calculateSectionSummary(
     totalWastage,
     wastagePercent: (totalWastage / totalStockUsed) * 100 || 0,
     totalGlassArea: 0, // Will be calculated separately from glassInfo
+    totalMosquitoArea: 0,
     stockSummary,
     wastagePiecesSummary,
     frameStockSummary,
@@ -213,6 +215,7 @@ export function combineSummaries(
     totalWastage: 0,
     wastagePercent: 0,
     totalGlassArea: 0,
+    totalMosquitoArea: 0,
     stockSummary: {},
     wastagePiecesSummary: {},
     frameStockSummary: {},
@@ -228,6 +231,7 @@ export function combineSummaries(
     combined.totalStockUsed += summary.totalStockUsed;
     combined.totalWastage += summary.totalWastage;
     combined.totalGlassArea += summary.totalGlassArea;
+    combined.totalMosquitoArea = (combined.totalMosquitoArea || 0) + (summary.totalMosquitoArea || 0);
 
     Object.entries(summary.stockSummary).forEach(([key, count]) => {
       combined.stockSummary[key] = (combined.stockSummary[key] || 0) + count;

@@ -18,10 +18,9 @@ const sectionSchema = z.object({
         threeTrackWidthAddition: z.number(),
         glassWidthDeduction: z.number(),
         glassHeightDeduction: z.number(),
-    })),
-    stockLengths: z.array(z.object({
-        length: z.number(),
-        lengthFeet: z.number(),
+        trackRailDeduction: z.number().default(0),
+        separateMosquitoNet: z.boolean().default(false),
+        differentFrameMaterials: z.boolean().default(false),
     })),
 });
 
@@ -42,7 +41,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const { name, isActive, trackTypes, configs, configurations, stockLengths } = result.data;
+        const { name, isActive, trackTypes, configs, configurations } = result.data;
 
         // Transaction to create everything
         const section = await db.$transaction(async (tx) => {
@@ -54,14 +53,10 @@ export async function POST(req: NextRequest) {
                     configs,
                     configurations: {
                         create: configurations
-                    },
-                    stockLengths: {
-                        create: stockLengths
                     }
                 },
                 include: {
-                    configurations: true,
-                    stockLengths: true
+                    configurations: true
                 }
             });
             return newSection;
