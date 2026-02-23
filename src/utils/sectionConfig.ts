@@ -55,7 +55,7 @@ export function getSectionConfig(
   const trackType = dbConfig.trackType as TrackType;
   const configuration = dbConfig.configuration as Configuration;
   const numberOfShutters = trackType === "3-track" ? 3 : 2;
-
+  const numberOfGlassShutters = configuration === "all-glass" ? numberOfShutters : numberOfShutters - 1;
   /**
    * Single source of truth for calculating final dimensions
    * This function calculates both shutter width and height with corrections applied
@@ -96,7 +96,7 @@ export function getSectionConfig(
     },
     calculateInterlockCount: (quantity: number) => {
       // PR states "Base interlock count on number of shutters per section height" Check if interlocks = shutters? Yes
-      return numberOfShutters * quantity;
+      return numberOfGlassShutters * quantity;
     },
     calculateTrackRailPieces: (sectionWidth: number, quantity: number) => {
       // Track Rail Calculation

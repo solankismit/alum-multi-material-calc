@@ -171,7 +171,7 @@ export default function WindowSchematic({ trackType, configuration, className = 
                         {/* Config Label */}
                         <text
                             x={panelX + (panelW / 2)}
-                            y={panelY + panelH - 10}
+                            y={(isMosquito ? 1 / 5 : 1) * (panelY + panelH - 10)}
                             textAnchor="middle"
                             fontSize="10"
                             fill={isMosquito ? "#475569" : "#3b82f6"}
