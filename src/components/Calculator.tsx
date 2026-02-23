@@ -133,15 +133,12 @@ export default function Calculator({ initialInput }: CalculatorProps) {
     return (
         <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100">
             <div className="container mx-auto px-4 py-8 max-w-7xl">
-                <header className="text-center mb-8">
-                    <div className="flex items-center justify-center gap-3 mb-4">
-                        <CalculatorIcon className="w-10 h-10 text-slate-700" />
-                        <h1 className="text-4xl font-bold text-slate-800">
-                            Aluminium Window Stock Estimation
-                        </h1>
-                    </div>
-                    <p className="text-slate-600 text-lg mb-6">
-                        Calculate material requirements and optimize stock usage
+                <header className="mb-6 border-b border-slate-200 pb-4">
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                        Material Calculator
+                    </h1>
+                    <p className="text-slate-500 text-sm mt-1">
+                        Optimize stock usage and estimate requirements for your project.
                     </p>
                 </header>
 
@@ -155,7 +152,7 @@ export default function Calculator({ initialInput }: CalculatorProps) {
                         />
                     </div>
 
-                    <div className="lg:col-span-1 lg:sticky lg:top-4 lg:self-start space-y-4">
+                    {result && <div className="lg:col-span-1 lg:sticky lg:top-4 lg:self-start space-y-4">
                         {/* Action Bar */}
                         <div className="bg-white p-4 rounded-lg shadow-sm flex flex-wrap items-center justify-between gap-4 transition-all duration-200">
                             {result && (
@@ -198,8 +195,12 @@ export default function Calculator({ initialInput }: CalculatorProps) {
                             )}
                         </div>
 
-                        {result && <ResultsDisplay result={result} />}
-                    </div>
+                        {result && (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <ResultsDisplay result={result} />
+                            </div>
+                        )}
+                    </div>}
                 </div>
             </div>
         </div>

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSectionTypes } from "@/lib/data-fetchers";
 
+export const revalidate = 3600;
+
 export async function GET() {
     try {
         const sectionTypes = await getSectionTypes();

@@ -347,11 +347,11 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
             return (
               <div
                 key={section.id}
-                className="relative p-6 bg-white border border-slate-200 rounded-xl shadow-sm transition-all hover:shadow-md hover:border-slate-300 group"
+                className="relative p-3 sm:p-6 bg-white border border-slate-200 rounded-xl shadow-sm transition-all hover:shadow-md hover:border-slate-300 group"
               >
                 <div className="absolute top-0 left-0 w-1 h-full bg-slate-200 rounded-l-xl group-hover:bg-slate-400 transition-colors" />
 
-                <div className="flex flex-wrap items-start justify-between gap-4 mb-6 pl-2">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6 pl-2">
                   <div className="flex-1 w-full sm:w-auto min-w-[200px]">
                     <Input
                       label="Section Name (Optional)"
@@ -366,40 +366,42 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                     />
                   </div>
 
-                  <div className="w-full sm:w-64">
-                    <Label className="text-slate-600 font-medium text-xs mb-1 block">System Profile</Label>
-                    <Select
-                      value={section.sectionTypeId || ""}
-                      onValueChange={(val) => updateSection(section.id, { sectionTypeId: val })}
-                      disabled={!allSections || allSections.length === 0}
-                    >
-                      <SelectTrigger className="border-slate-200 bg-slate-50">
-                        <SelectValue placeholder="Select system..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {allSections?.map((sys) => (
-                          <SelectItem key={sys.id} value={sys.id}>
-                            {sys.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="w-full sm:w-auto flex items-end gap-2">
+                    <div className="flex-1 sm:w-64">
+                      <Label className="text-slate-600 font-medium text-xs mb-1 block">System Profile</Label>
+                      <Select
+                        value={section.sectionTypeId || ""}
+                        onValueChange={(val) => updateSection(section.id, { sectionTypeId: val })}
+                        disabled={!allSections || allSections.length === 0}
+                      >
+                        <SelectTrigger className="border-slate-200 bg-slate-50">
+                          <SelectValue placeholder="Select system..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allSections?.map((sys) => (
+                            <SelectItem key={sys.id} value={sys.id}>
+                              {sys.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {sections.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeSection(section.id)}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span className="sr-only">Remove</span>
+                      </Button>
+                    )}
                   </div>
-                  {sections.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeSection(section.id)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span className="sr-only">Remove</span>
-                    </Button>
-                  )}
                 </div>
 
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg p-3 mb-6 pl-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4 sm:mb-6 pl-4 gap-3">
                   <div>
                     <h4 className="font-medium text-slate-800 text-sm">Stock Configuration</h4>
                     <p className="text-xs text-slate-500">Assign specific stock sizes for this section.</p>
@@ -410,7 +412,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                   />
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-6 mb-6 pl-2">
+                <div className="grid md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6 pl-2">
                   <div className="space-y-6">
                     <div className="space-y-3">
                       <Label className="text-slate-600 font-medium">Track Type</Label>
@@ -531,7 +533,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                     {section.dimensions.map((dimension, idx) => (
                       <div
                         key={dimension.id}
-                        className="grid grid-cols-12 gap-3 items-start animate-in fade-in slide-in-from-top-1 duration-200"
+                        className="grid grid-cols-12 gap-2 sm:gap-3 items-start animate-in fade-in slide-in-from-top-1 duration-200"
                       >
                         <div className="col-span-4 sm:col-span-4 md:col-span-4">
                           <Input

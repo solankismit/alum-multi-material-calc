@@ -168,65 +168,119 @@ export default function WorksheetList() {
                 </div>
             </CardHeader>
             <CardContent className="pb-24">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-gray-500 border-b">
-                            <tr>
-                                <th className="py-3 px-4 w-10">
-                                    <Checkbox
-                                        checked={worksheets.length > 0 && selectedIds.length === worksheets.length}
-                                        onCheckedChange={toggleSelectAll}
-                                        aria-label="Select all"
-                                    />
-                                </th>
-                                <th className="py-3 px-4 font-medium">Name</th>
-                                <th className="py-3 px-4 font-medium">Last Modified</th>
-                                <th className="py-3 px-4 font-medium text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {worksheets.map((worksheet) => (
-                                <tr key={worksheet.id} className={`border-b last:border-0 hover:bg-gray-50 ${selectedIds.includes(worksheet.id) ? "bg-indigo-50/50" : ""}`}>
-                                    <td className="py-3 px-4">
+                <div className="overflow-hidden">
+                    {/* Mobile Card View */}
+                    <div className="grid grid-cols-1 gap-4 md:hidden px-2 pt-2">
+                        {worksheets.map((worksheet, idx) => (
+                            <div
+                                key={worksheet.id}
+                                className={`border rounded-xl p-4 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 ${selectedIds.includes(worksheet.id) ? "bg-indigo-50/50 border-indigo-200" : "bg-white border-gray-100 hover:border-gray-200 shadow-sm"}`}
+                                style={{ animationDelay: `${idx * 50}ms` }}
+                            >
+                                <div className="flex items-start justify-between mb-3">
+                                    <div className="flex items-center gap-3">
                                         <Checkbox
                                             checked={selectedIds.includes(worksheet.id)}
                                             onCheckedChange={() => toggleSelect(worksheet.id)}
                                             aria-label={`Select ${worksheet.name}`}
                                         />
-                                    </td>
-                                    <td className="py-3 px-4 font-medium text-gray-900">
-                                        <Link href={`/worksheets/${worksheet.id}`} className="hover:underline flex items-center">
-                                            <FileText className="w-4 h-4 mr-2 text-indigo-500" />
-                                            {worksheet.name}
+                                        <Link href={`/worksheets/${worksheet.id}`} className="font-semibold text-gray-900 group">
+                                            <span className="flex items-center gap-2 group-hover:text-indigo-600 transition-colors">
+                                                <FileText className="w-4 h-4 text-indigo-500" />
+                                                <span className="truncate max-w-[200px]">{worksheet.name}</span>
+                                            </span>
                                         </Link>
-                                    </td>
-                                    <td className="py-3 px-4 text-gray-500">
+                                    </div>
+                                    <div className="text-xs text-gray-400">
                                         {new Date(worksheet.updatedAt).toLocaleDateString()}
-                                    </td>
-                                    <td className="py-3 px-4 text-right">
-                                        <div className="flex items-center justify-end space-x-2">
-                                            <Link href={`/worksheets/${worksheet.id}`}>
-                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                    <ExternalLink className="h-4 w-4" />
-                                                    <span className="sr-only">Open</span>
-                                                </Button>
-                                            </Link>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                                onClick={() => handleDelete(worksheet.id)}
-                                                isLoading={deletingId === worksheet.id}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                                <span className="sr-only">Delete</span>
-                                            </Button>
-                                        </div>
-                                    </td>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-50 mt-2">
+                                    <Link href={`/worksheets/${worksheet.id}`}>
+                                        <Button variant="ghost" size="sm" className="h-8 px-3 text-gray-600">
+                                            Open
+                                        </Button>
+                                    </Link>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                        onClick={() => handleDelete(worksheet.id)}
+                                        isLoading={deletingId === worksheet.id}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-gray-500 border-b">
+                                <tr>
+                                    <th className="py-3 px-4 w-10">
+                                        <Checkbox
+                                            checked={worksheets.length > 0 && selectedIds.length === worksheets.length}
+                                            onCheckedChange={toggleSelectAll}
+                                            aria-label="Select all"
+                                        />
+                                    </th>
+                                    <th className="py-3 px-4 font-medium">Name</th>
+                                    <th className="py-3 px-4 font-medium">Last Modified</th>
+                                    <th className="py-3 px-4 font-medium text-right">Actions</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {worksheets.map((worksheet, idx) => (
+                                    <tr
+                                        key={worksheet.id}
+                                        className={`group border-b last:border-0 transition-colors duration-200 animate-in fade-in slide-in-from-bottom-2 ${selectedIds.includes(worksheet.id) ? "bg-indigo-50/50" : "hover:bg-gray-50"}`}
+                                        style={{ animationDelay: `${idx * 40}ms` }}
+                                    >
+                                        <td className="py-3 px-4">
+                                            <Checkbox
+                                                checked={selectedIds.includes(worksheet.id)}
+                                                onCheckedChange={() => toggleSelect(worksheet.id)}
+                                                aria-label={`Select ${worksheet.name}`}
+                                            />
+                                        </td>
+                                        <td className="py-3 px-4 font-medium text-gray-900">
+                                            <Link href={`/worksheets/${worksheet.id}`} className="flex items-center group transition-colors">
+                                                <FileText className="w-4 h-4 mr-2 text-indigo-400 group-hover:text-indigo-600" />
+                                                <span className="group-hover:text-indigo-600">{worksheet.name}</span>
+                                            </Link>
+                                        </td>
+                                        <td className="py-3 px-4 text-gray-500">
+                                            {new Date(worksheet.updatedAt).toLocaleDateString()}
+                                        </td>
+                                        <td className="py-3 px-4 text-right">
+                                            <div className="flex items-center justify-end space-x-2 opacity-100 group-hover:opacity-100 transition-opacity [&:has(:focus-visible)]:opacity-100">
+                                                <div className="flex items-center justify-end space-x-2 transition-opacity focus-within:opacity-100 sm:opacity-100">
+                                                    <Link href={`/worksheets/${worksheet.id}`}>
+                                                        <Button variant="ghost" className="h-10 w-10 !p-3.5">
+                                                            <ExternalLink className="h-5 w-5" />
+                                                            <span className="sr-only">Open</span>
+                                                        </Button>
+                                                    </Link>
+                                                    <Button
+                                                        variant="ghost"
+                                                        className="h-10 w-10 !p-3.5 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                        onClick={() => handleDelete(worksheet.id)}
+                                                        isLoading={deletingId === worksheet.id}
+                                                    >
+                                                        <Trash2 className="h-5 w-5" />
+                                                        <span className="sr-only">Delete</span>
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </CardContent>
 
