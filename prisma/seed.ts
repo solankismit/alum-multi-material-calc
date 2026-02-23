@@ -20,29 +20,9 @@ async function main() {
 
     console.log(`Created/Found SectionType: ${domal27.name}`);
 
-    // 2. Create Stock Lengths
-    const lengths = [12, 15, 16]; // feet
-    for (const feet of lengths) {
-        const mm = feet * 304.8; // Approximate conversion for storing
-        await prisma.stockLength.upsert({
-            where: {
-                sectionTypeId_length: {
-                    sectionTypeId: domal27.id,
-                    length: mm
-                }
-            },
-            update: {},
-            create: {
-                sectionTypeId: domal27.id,
-                length: mm,
-                lengthFeet: feet,
-                isActive: true,
-            },
-        });
-    }
-    console.log("Seeded Stock Lengths");
 
-    // 3. Create Configurations
+
+    // 2. Create Configurations
     // We need configs for:
     // - 2-track + all-glass
     // - 2-track + glass-mosquito

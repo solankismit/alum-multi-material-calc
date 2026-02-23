@@ -24,7 +24,6 @@ export default async function EditSectionPage({
         where: { id },
         include: {
             configurations: true,
-            stockLengths: true,
         },
     });
 

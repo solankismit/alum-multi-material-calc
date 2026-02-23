@@ -1,13 +1,15 @@
+import { cn } from "@/lib/utils";
 import * as React from "react";
 
 export interface InputProps
     extends React.InputHTMLAttributes<HTMLInputElement> {
     label?: string;
     error?: string;
+    labelClassName?: string;
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-    ({ className = "", type, label, error, id, ...props }, ref) => {
+    ({ className = "", type, label, error, id, labelClassName, ...props }, ref) => {
         const inputId = id || props.name;
 
         return (
@@ -15,21 +17,22 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
                 {label && (
                     <label
                         htmlFor={inputId}
-                        className="block text-sm font-medium leading-6 text-gray-900 mb-1"
+                        className={`block text-sm font-medium leading-6 text-gray-900 mb-1 ${labelClassName}`}
                     >
                         {label}
                     </label>
                 )}
-                <div className="relative">
-                    <input
-                        type={type}
-                        id={inputId}
-                        className={`block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 pl-3 ${error ? "ring-red-500 focus:ring-red-500" : ""
-                            } ${className}`}
-                        ref={ref}
-                        {...props}
-                    />
-                </div>
+                <input
+                    type={type}
+                    id={inputId}
+                    name={inputId}
+                    className={cn(
+                        "flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+                        className
+                    )}
+                    ref={ref}
+                    {...props}
+                />
                 {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
             </div>
         );

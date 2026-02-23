@@ -44,7 +44,6 @@ export default async function AdminDashboardPage() {
     const sections = await db.sectionType.findMany({
         include: {
             configurations: true,
-            stockLengths: true,
         }
     });
 
@@ -67,9 +66,9 @@ export default async function AdminDashboardPage() {
                                 <CardTitle className="text-sm font-medium text-slate-500">
                                     System Configurations
                                 </CardTitle>
-                                <div className="p-2 bg-indigo-50 rounded-full group-hover:bg-indigo-100 transition-colors">
+                                <div className="p-2  r">
                                     <h4 className="w-4 h-4 text-indigo-600">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-settings-2"><path d="M20 7h-9" /><path d="M14 17H5" /><circle cx="17" cy="17" r="3" /><circle cx="7" cy="7" r="3" /></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-settings-2 text-slate-400"><path d="M20 7h-9" /><path d="M14 17H5" /><circle cx="17" cy="17" r="3" /><circle cx="7" cy="7" r="3" /></svg>
                                     </h4>
                                 </div>
                             </CardHeader>

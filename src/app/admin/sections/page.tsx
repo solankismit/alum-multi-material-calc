@@ -17,7 +17,7 @@ export default async function AdminSectionsPage() {
         orderBy: { name: "asc" },
         include: {
             _count: {
-                select: { configurations: true, stockLengths: true }
+                select: { configurations: true }
             }
         }
     });
@@ -71,13 +71,7 @@ export default async function AdminSectionsPage() {
                                         </div>
                                         <span className="font-semibold text-slate-900">{section._count.configurations}</span>
                                     </div>
-                                    <div className="flex items-center justify-between text-sm">
-                                        <div className="flex items-center text-slate-600">
-                                            <Ruler className="w-4 h-4 mr-2" />
-                                            Stock Lengths
-                                        </div>
-                                        <span className="font-semibold text-slate-900">{section._count.stockLengths}</span>
-                                    </div>
+
                                     <div className="pt-2 border-t border-slate-100">
                                         <p className="text-xs text-slate-500 mb-1">Supported Tracks:</p>
                                         <div className="flex flex-wrap gap-1">

@@ -7,9 +7,7 @@ export const getSectionTypes = unstable_cache(
             where: { isActive: true },
             include: {
                 configurations: true,
-                stockLengths: {
-                    where: { isActive: true },
-                },
+
             },
         });
     },

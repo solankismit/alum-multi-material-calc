@@ -359,8 +359,10 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                       onChange={(e) =>
                         updateSection(section.id, { name: e.target.value })
                       }
+                      id="sectionName"
+                      labelClassName="text-slate-600 font-medium text-xs mb-1 block leading-none"
                       placeholder="e.g. Living Room Window"
-                      className="text-lg font-medium border-0 border-b border-slate-200 rounded-none px-0 focus:ring-0 focus:border-slate-800 transition-colors bg-transparent placeholder:text-slate-400"
+                      className=" font-medium border-0 border-b rounded-none border-slate-200  px-0 focus:ring-0 focus:border-slate-800 transition-colors bg-transparent placeholder:text-slate-400"
                     />
                   </div>
 

@@ -32,9 +32,6 @@ model User {
   updatedAt DateTime @updatedAt
   
   worksheets Worksheet[]
-  
-  // User-specific preferences for section stock lengths
-  sectionPreferences UserSectionPreference[]
 }
 
 model SectionType {
@@ -45,7 +42,6 @@ model SectionType {
   configs     String[] // ["all-glass", "glass-mosquito"]
   
   configurations SectionConfiguration[]
-  stockLengths   StockLength[]
 }
 
 // Stores the specific formulas/constants for a (TrackType + Config) variation
@@ -82,32 +78,6 @@ model SectionConfiguration {
   @@unique([sectionTypeId, trackType, configuration])
 }
 
-model StockLength {
-  id            String      @id @default(uuid())
-  sectionTypeId String
-  sectionType   SectionType @relation(fields: [sectionTypeId], references: [id], onDelete: Cascade)
-  
-  length     Float // in mm
-  lengthFeet Float
-  isActive   Boolean @default(true)
-
-  userPreferences UserSectionPreference[]
-
-  @@unique([sectionTypeId, length])
-}
-
-model UserSectionPreference {
-  id            String      @id @default(uuid())
-  userId        String
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  stockLengthId String
-  stockLength   StockLength @relation(fields: [stockLengthId], references: [id], onDelete: Cascade)
-  
-  isActive      Boolean     @default(true) // User can override default active status for themselves
-
-  @@unique([userId, stockLengthId])
-}
 
 model Worksheet {
   id        String   @id @default(uuid())
