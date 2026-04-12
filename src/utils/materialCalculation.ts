@@ -58,7 +58,7 @@ function calculateShutterPieces(
   calculateFinalDimensions: (
     sectionWidth: number,
     sectionHeight: number,
-    config: Configuration
+    numberOfSections?: number
   ) => { shutterWidth: number; height: number },
   configuration: Configuration
 ): {
@@ -77,12 +77,14 @@ function calculateShutterPieces(
     const finalDimensions = calculateFinalDimensions(
       width,
       height,
-      configuration
+      dim.sections || undefined
     );
+
+    const actualNumberOfShutters = dim.sections || numberOfShutters;
 
     heightPieces.push({
       length: finalDimensions.height,
-      count: 2 * numberOfShutters * quantity,
+      count: 2 * actualNumberOfShutters * quantity,
     });
 
     // If separateMosquitoNet is true and config is glass-mosquito:
@@ -96,7 +98,7 @@ function calculateShutterPieces(
     // Let's just pass `sectionConfigData` into the create functions from `calculateSectionMaterials`.
     widthPieces.push({
       length: finalDimensions.shutterWidth,
-      count: 2 * numberOfShutters * quantity,
+      count: 2 * actualNumberOfShutters * quantity,
     });
   });
 
@@ -227,14 +229,15 @@ function createShutterMaterial(
 
     dimensions.forEach(dim => {
       if (!dim.quantity || !dim.width || !dim.height) return;
-      const finalDims = sectionConfig.calculateFinalDimensions(dim.width, dim.height);
+      const finalDims = sectionConfig.calculateFinalDimensions(dim.width, dim.height, dim.sections || undefined);
+      const actualNumberOfShutters = dim.sections || sectionConfig.numberOfShutters;
 
       // Mosquito
       mosquitoHeightPieces.push({ length: finalDims.height, count: 2 * dim.quantity });
       mosquitoWidthPieces.push({ length: finalDims.shutterWidth, count: 2 * dim.quantity });
 
-      // Glass (assuming the rest of the shutters are glass. 3-track = 3 shutters -> 1 mosq, 2 glass = 4 pieces)
-      const glassShuttersCount = sectionConfig.numberOfShutters - 1;
+      // Glass (assuming the rest of the shutters are glass)
+      const glassShuttersCount = actualNumberOfShutters - 1;
       glassHeightPieces.push({ length: finalDims.height, count: 2 * glassShuttersCount * dim.quantity });
       glassWidthPieces.push({ length: finalDims.shutterWidth, count: 2 * glassShuttersCount * dim.quantity });
     });
@@ -346,8 +349,28 @@ function createTrackRailMaterial(
     description: `Track Rails: ${pieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")}`,
   };
 }
+function createMullionMaterial(
+  dimensions: WindowDimension[],
+  calculateMullionPieces: (h: number, q: number, s?: number) => { length: number; count: number } | null,
+  stockOptions?: StockOption[]
+): MaterialRequirement | null {
+  const pieces: PieceCount[] = [];
+  dimensions.forEach(dim => {
+    if (!dim.quantity || !dim.height || !dim.sections || dim.sections <= 1) return;
+    const req = calculateMullionPieces(dim.height, dim.quantity, dim.sections);
+    if (req && req.length > 0 && req.count > 0) pieces.push(req);
+  });
 
+  if (pieces.length === 0) return null;
 
+  const reqs = pieces.map(p => ({ length: p.length, count: p.count, type: `mullion-${p.length}` }));
+  return {
+    component: "Mullion",
+    totalRequired: pieces.reduce((sum, p) => sum + p.length * p.count, 0),
+    stockBreakdown: optimizeCombinedStockUsage(reqs, stockOptions),
+    description: `Mullion Pieces: ${pieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")}`,
+  };
+}
 
 
 /**
@@ -356,10 +379,11 @@ function createTrackRailMaterial(
 export function calculateSectionMaterials(
   section: {
     dimensions: WindowDimension[];
-    trackType: "2-track" | "3-track";
-    configuration: "all-glass" | "glass-mosquito";
+    trackType: "2-track" | "3-track" | "openable" | string;
+    configuration: "all-glass" | "glass-mosquito" | string;
+    systemType?: string;
   },
-  sectionConfigData: SectionConfiguration,
+  sectionConfigData: SectionConfiguration & { systemType?: string },
   stockMap?: MaterialStockMap
 ): SectionMaterialsResult {
   const { trackType, configuration, dimensions } = section;
@@ -385,7 +409,7 @@ export function calculateSectionMaterials(
     const width = dim.width!;
     const quantity = dim.quantity!;
 
-    const glassSize = sectionConfig.calculateGlassSize(width, height, quantity);
+    const glassSize = sectionConfig.calculateGlassSize(width, height, quantity, dim.sections || undefined);
     glassInfo.push({
       dimensionId: dim.id,
       glassSize,
@@ -409,8 +433,16 @@ export function calculateSectionMaterials(
   materials.push(createInterlockMaterial(interlockPieces, trackType, stockMap?.['interlock']));
 
   // Calculate track rail pieces
-  const trackRailMat = createTrackRailMaterial(validDimensions, sectionConfig.calculateTrackRailPieces, stockMap?.['trackRail']);
-  if (trackRailMat) materials.push(trackRailMat);
+  if (sectionConfig.calculateTrackRailPieces && sectionConfig.calculateTrackRailPieces != null) {
+    const trackRailMat = createTrackRailMaterial(validDimensions, sectionConfig.calculateTrackRailPieces, stockMap?.['trackRail']);
+    if (trackRailMat) materials.push(trackRailMat);
+  }
+
+  // Calculate mullion pieces (Openable specific)
+  if (sectionConfig.calculateMullionPieces) {
+    const mullionMat = createMullionMaterial(validDimensions, sectionConfig.calculateMullionPieces, stockMap?.['mullion']);
+    if (mullionMat) materials.push(mullionMat);
+  }
 
   // Calculate accessories
   const accessories = calculateAccessories(

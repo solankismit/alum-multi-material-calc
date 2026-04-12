@@ -19,15 +19,16 @@ export interface FinalDimensions {
 }
 
 export interface SectionTypeConfig {
-  trackType: TrackType;
-  configuration: Configuration;
-  numberOfShutters: number;
+  trackType: TrackType | string;
+  configuration: Configuration | string;
+  numberOfShutters: number; // Fallback for sliding
   /**
    * Single source of truth: calculates all final dimensions at once
    */
   calculateFinalDimensions: (
     sectionWidth: number,
-    sectionHeight: number
+    sectionHeight: number,
+    numberOfSections?: number
   ) => FinalDimensions;
   calculateInterlockLength: (height: number) => number;
   calculateInterlockCount: (quantity: number) => number;
@@ -39,10 +40,12 @@ export interface SectionTypeConfig {
   };
   getShutterLabel: () => string;
   calculateTrackRailPieces: (sectionWidth: number, quantity: number) => { length: number; count: number };
+  calculateMullionPieces: (sectionHeight: number, quantity: number, numberOfSections?: number) => { length: number; count: number } | null;
   calculateGlassSize: (
     sectionWidth: number,
     sectionHeight: number,
-    quantity: number
+    quantity: number,
+    numberOfSections?: number
   ) => GlassSize;
 }
 
@@ -50,10 +53,11 @@ export interface SectionTypeConfig {
  * Get section configuration based on database config
  */
 export function getSectionConfig(
-  dbConfig: SectionConfiguration
+  dbConfig: SectionConfiguration & { systemType?: string }
 ): SectionTypeConfig {
-  const trackType = dbConfig.trackType as TrackType;
-  const configuration = dbConfig.configuration as Configuration;
+  const trackType = dbConfig.trackType;
+  const configuration = dbConfig.configuration;
+  const isOpenable = dbConfig.systemType === "openable" || trackType === "openable";
   const numberOfShutters = trackType === "3-track" ? 3 : 2;
   const numberOfGlassShutters = configuration === "all-glass" ? numberOfShutters : numberOfShutters - 1;
   /**
@@ -62,22 +66,27 @@ export function getSectionConfig(
    */
   const calculateFinalDimensions = (
     sectionWidth: number,
-    sectionHeight: number
+    sectionHeight: number,
+    numberOfSections: number = isOpenable ? 2 : numberOfShutters
   ): FinalDimensions => {
     let shutterWidth: number;
+    let height: number;
 
-    if (trackType === "3-track" && configuration === "all-glass") {
-      // For 3-track 3-glass: Final shutter width = (section width + z) / 3
-      shutterWidth = (sectionWidth + dbConfig.threeTrackWidthAddition) / 3;
+    if (isOpenable) {
+      const n = Math.max(1, numberOfSections);
+      const outerDeduction = dbConfig.outerFrameWidthDeduction || 0;
+      const mullionDeduction = dbConfig.mullionWidthDeduction || 0;
+      shutterWidth = (sectionWidth - outerDeduction - (n - 1) * mullionDeduction) / n;
+      height = sectionHeight - (dbConfig.outerFrameHeightDeduction || 0);
     } else {
-      // For 3-track 2 glass-mosquito and 2-track 2 glass:
-      // Final shutter width = (section width / 2) - x
-      const baseShutterWidth = sectionWidth / 2;
-      shutterWidth = baseShutterWidth - dbConfig.shutterWidthDeduction;
+      if (trackType === "3-track" && configuration === "all-glass") {
+        shutterWidth = (sectionWidth + dbConfig.threeTrackWidthAddition) / 3;
+      } else {
+        const baseShutterWidth = sectionWidth / 2;
+        shutterWidth = baseShutterWidth - dbConfig.shutterWidthDeduction;
+      }
+      height = sectionHeight - dbConfig.heightDeduction;
     }
-
-    // Final height = height - y (applies to all section types)
-    const height = sectionHeight - dbConfig.heightDeduction;
 
     return {
       shutterWidth,
@@ -99,13 +108,18 @@ export function getSectionConfig(
       return numberOfGlassShutters * quantity;
     },
     calculateTrackRailPieces: (sectionWidth: number, quantity: number) => {
-      // Track Rail Calculation
-      // Quantity = 2 (for 2-track) or 3 (for 3-track) per window * total quantity
-      // Length = sectionWidth - trackRailDeduction
+      if (isOpenable) return { length: 0, count: 0 };
       const countPerWindow = trackType === "3-track" ? 3 : 2;
       return {
         length: sectionWidth - (dbConfig.trackRailDeduction || 0),
         count: countPerWindow * quantity
+      };
+    },
+    calculateMullionPieces: (sectionHeight: number, quantity: number, numberOfSections: number = 1) => {
+      if (!isOpenable || numberOfSections <= 1) return null;
+      return {
+        length: sectionHeight - (dbConfig.mullionLengthDeduction || 0),
+        count: (numberOfSections - 1) * quantity
       };
     },
     calculateAccessories: (quantity: number) => {
@@ -127,23 +141,21 @@ export function getSectionConfig(
     calculateGlassSize: (
       sectionWidth: number,
       sectionHeight: number,
-      quantity: number
+      quantity: number,
+      numberOfSections?: number
     ): GlassSize => {
-      // Use single source of truth for final dimensions
       const finalDimensions = calculateFinalDimensions(
         sectionWidth,
-        sectionHeight
+        sectionHeight,
+        numberOfSections
       );
 
-      // Glass Size = (Final Shutter Width - a) × (Final Height - b)
-      const glassWidth =
-        finalDimensions.shutterWidth - dbConfig.glassWidthDeduction;
-      const glassHeight =
-        finalDimensions.height - dbConfig.glassHeightDeduction;
+      const glassWidth = finalDimensions.shutterWidth - dbConfig.glassWidthDeduction;
+      const glassHeight = finalDimensions.height - dbConfig.glassHeightDeduction;
       const glassArea = glassWidth * glassHeight;
 
-      // Glasses = Glass Size × total number of shutters
-      const totalArea = glassArea * numberOfShutters * quantity;
+      const numShutters = isOpenable ? (numberOfSections || 2) : numberOfShutters;
+      const totalArea = glassArea * numShutters * quantity;
 
       return {
         finalShutterWidth: finalDimensions.shutterWidth,

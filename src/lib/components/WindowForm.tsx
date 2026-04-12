@@ -339,9 +339,10 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
             const availableConfigs = selectedSystem?.configurations || [];
             const has2Track = availableConfigs.some((c: any) => c.trackType === "2-track");
             const has3Track = availableConfigs.some((c: any) => c.trackType === "3-track");
+            const isSystemOpenable = selectedSystem?.systemType === "openable";
 
-            const isAllGlassValid = availableConfigs.some((c: any) => c.trackType === section.trackType && c.configuration === "all-glass");
-            const isGlassMosquitoValid = availableConfigs.some((c: any) => c.trackType === section.trackType && c.configuration === "glass-mosquito");
+            const isAllGlassValid = availableConfigs.some((c: any) => c.trackType === section.trackType && c.configuration === "all-glass") || isSystemOpenable;
+            const isGlassMosquitoValid = availableConfigs.some((c: any) => c.trackType === section.trackType && c.configuration === "glass-mosquito") || isSystemOpenable;
 
 
             return (
@@ -414,42 +415,44 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
 
                 <div className="grid md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6 pl-2">
                   <div className="space-y-6">
-                    <div className="space-y-3">
-                      <Label className="text-slate-600 font-medium">Track Type</Label>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            updateSection(section.id, {
-                              trackType: "2-track",
-                              configuration: "all-glass",
-                            });
-                          }}
-                          className={`${uiStyles.selectableButton.base} ${section.trackType === "2-track"
-                            ? uiStyles.selectableButton.active
-                            : uiStyles.selectableButton.inactive
-                            }`}
-                          disabled={!has2Track}
-                        >
-                          2-Track
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() =>
-                            updateSection(section.id, { trackType: "3-track", configuration: "glass-mosquito" })
-                          }
-                          className={`${uiStyles.selectableButton.base} ${section.trackType === "3-track"
-                            ? uiStyles.selectableButton.active
-                            : uiStyles.selectableButton.inactive
-                            }`}
-                          disabled={!has3Track}
-                        >
-                          3-Track
-                        </Button>
+                    {!isSystemOpenable && (
+                      <div className="space-y-3">
+                        <Label className="text-slate-600 font-medium">Track Type</Label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              updateSection(section.id, {
+                                trackType: "2-track",
+                                configuration: "all-glass",
+                              });
+                            }}
+                            className={`${uiStyles.selectableButton.base} ${section.trackType === "2-track"
+                              ? uiStyles.selectableButton.active
+                              : uiStyles.selectableButton.inactive
+                              }`}
+                            disabled={!has2Track}
+                          >
+                            2-Track
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              updateSection(section.id, { trackType: "3-track", configuration: "glass-mosquito" })
+                            }
+                            className={`${uiStyles.selectableButton.base} ${section.trackType === "3-track"
+                              ? uiStyles.selectableButton.active
+                              : uiStyles.selectableButton.inactive
+                              }`}
+                            disabled={!has3Track}
+                          >
+                            3-Track
+                          </Button>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div className="space-y-3">
                       <Label className="text-slate-600 font-medium">Configuration</Label>
@@ -519,8 +522,9 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                     <Label className="text-slate-600 font-medium">Visualization</Label>
                     <div className="flex-1 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-center p-4">
                       <WindowSchematic
-                        trackType={section.trackType}
+                        trackType={isSystemOpenable ? "openable" : section.trackType}
                         configuration={section.configuration}
+                        sections={isSystemOpenable && section.dimensions[0] ? (section.dimensions[0].sections || 2) : undefined}
                         className="max-h-[220px] shadow-sm"
                       />
                     </div>
@@ -535,7 +539,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                         key={dimension.id}
                         className="grid grid-cols-12 gap-2 sm:gap-3 items-start animate-in fade-in slide-in-from-top-1 duration-200"
                       >
-                        <div className="col-span-4 sm:col-span-4 md:col-span-4">
+                        <div className={isSystemOpenable ? "col-span-3" : "col-span-4"}>
                           <Input
                             label={idx === 0 ? `Height (${unitMode})` : undefined}
                             type="number"
@@ -632,7 +636,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                           />
                         </div>
 
-                        <div className="col-span-4 sm:col-span-4 md:col-span-4">
+                        <div className={isSystemOpenable ? "col-span-3" : "col-span-4"}>
                           <Input
                             label={idx === 0 ? `Width (${unitMode})` : undefined}
                             type="number"
@@ -725,7 +729,29 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                           />
                         </div>
 
-                        <div className="col-span-4 sm:col-span-4 md:col-span-4 flex items-end gap-1">
+                        {isSystemOpenable && (
+                          <div className="col-span-3">
+                            <Input
+                              label={idx === 0 ? "Panels" : undefined}
+                              type="number"
+                              min="1"
+                              placeholder="Sections"
+                              value={dimension.sections === null || dimension.sections === undefined ? "" : dimension.sections}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === "") {
+                                  updateDimension(section.id, dimension.id, { sections: null });
+                                  return;
+                                }
+                                const num = Number(value);
+                                if (!isNaN(num)) updateDimension(section.id, dimension.id, { sections: num });
+                              }}
+                              className="text-center"
+                            />
+                          </div>
+                        )}
+
+                        <div className={`${isSystemOpenable ? "col-span-3" : "col-span-4"} flex items-end gap-1`}>
                           <div className="flex-1">
                             <Input
                               label={idx === 0 ? "Qty" : undefined}

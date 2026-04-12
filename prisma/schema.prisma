@@ -38,6 +38,7 @@ model SectionType {
   id          String   @id @default(uuid())
   name        String   @unique
   isActive    Boolean  @default(true)
+  systemType  String   @default("sliding") // "sliding", "openable"
   trackTypes  String[] // ["2-track", "3-track"]
   configs     String[] // ["all-glass", "glass-mosquito"]
   
@@ -60,6 +61,12 @@ model SectionConfiguration {
   glassWidthDeduction      Float // glass width deduction (was a)
   glassHeightDeduction     Float // glass height deduction (was b)
   trackRailDeduction       Float @default(0) // width deduction for track rail
+
+  // New generic deductions for Openable windows
+  outerFrameWidthDeduction Float?
+  outerFrameHeightDeduction Float?
+  mullionWidthDeduction    Float?
+  mullionLengthDeduction   Float?
 
   // Feature Flags
   separateMosquitoNet     Boolean @default(false)

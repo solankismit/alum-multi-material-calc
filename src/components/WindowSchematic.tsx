@@ -3,12 +3,13 @@
 import React from 'react';
 
 interface WindowSchematicProps {
-    trackType: "2-track" | "3-track";
-    configuration: "all-glass" | "glass-mosquito";
+    trackType: "2-track" | "3-track" | "openable" | string;
+    configuration: "all-glass" | "glass-mosquito" | string;
+    sections?: number;
     className?: string;
 }
 
-export default function WindowSchematic({ trackType, configuration, className = "" }: WindowSchematicProps) {
+export default function WindowSchematic({ trackType, configuration, sections = 2, className = "" }: WindowSchematicProps) {
     // Canvas Logic
     const width = 400;
     const height = 300;
@@ -21,29 +22,25 @@ export default function WindowSchematic({ trackType, configuration, className = 
     // Track Logic
     // 2-track = 2 rails
     // 3-track = 3 rails
-    const numTracks = trackType === "3-track" ? 3 : 2;
-
-    // Panel Logic
-    // 2-track All Glass -> 2 Glass Panels
-    // 2-track Glass+Mosq -> 1 Glass + 1 Mosq (Technically 2 panels usually)
-    // 3-track All Glass -> 3 Glass Panels
-    // 3-track Glass+Mosq -> 2 Glass + 1 Mosq
+    const numTracks = trackType === "3-track" ? 3 : (trackType === "openable" ? 1 : 2);
 
     let panels = [];
 
-    if (trackType === "2-track") {
+    if (trackType === "openable") {
+        const n = Math.max(1, sections);
+        const wRatio = 1 / n;
+        for (let i = 0; i < n; i++) {
+            // If configuration is "glass-mosquito", visually show alternate or just glass if it's identical identical pieces (user said calculations are identical). We will just color them as glass for schematic simplicity or mixed.
+            // Let's just draw them as side-by-side openable shutters.
+            panels.push({ type: 'openable', track: 0, offset: i * wRatio, widthRatio: wRatio });
+        }
+    } else if (trackType === "2-track") {
         if (configuration === "all-glass") {
-            // 2 Glass Panels
             panels = [
                 { type: 'glass', track: 0, offset: 0, widthRatio: 0.52 }, // Left 
                 { type: 'glass', track: 1, offset: 0.48, widthRatio: 0.52 } // Right
             ];
         } else {
-            // 2-track with mosquito usually implies one sash is mosquito? 
-            // Or maybe it's just 2 panels (Glass + Mesh). Let's assume 1 Glass 1 Mesh for visualization if selected
-            // But standard 2-track windows are usually 2 glass sliders.
-            // If user selects "Glass + Mosquito" on 2-track, it might mean separate mesh track or 1 glass 1 mesh.
-            // Let's visualize as 1 Glass 1 Mesh for clarity.
             panels = [
                 { type: 'glass', track: 0, offset: 0, widthRatio: 0.52 },
                 { type: 'mosquito', track: 1, offset: 0.48, widthRatio: 0.52 }
@@ -58,9 +55,8 @@ export default function WindowSchematic({ trackType, configuration, className = 
                 { type: 'glass', track: 2, offset: 0.64, widthRatio: 0.36 }
             ];
         } else {
-            // 2 Glass + 1 Mosquito
             panels = [
-                { type: 'mosquito', track: 0, offset: 0, widthRatio: 0.48 }, // Mesh usually on inside or outside depending on region. Let's put first.
+                { type: 'mosquito', track: 0, offset: 0, widthRatio: 0.48 },
                 { type: 'glass', track: 1, offset: 0, widthRatio: 0.52 },
                 { type: 'glass', track: 2, offset: 0.48, widthRatio: 0.52 }
             ];
@@ -124,16 +120,18 @@ export default function WindowSchematic({ trackType, configuration, className = 
 
             {/* Panels (Shutters) */}
             {panels.map((panel, idx) => {
-                const panelW = frameW * panel.widthRatio;
-                // Offset calculation needs to align with visual tracks
-                // We'll simulate depth by indenting y slightly for inner tracks
-                // Track 0 = Outer, Track N = Inner (Visual layering)
-
-                // Usually tracks are distinct. Let's simplify:
-                // We just draw the rects overlapping slightly in X.
-                // Their Z-index (order) determines visibility.
-
-                const panelX = padding + (frameW * panel.offset);
+                const isOpenableSystem = trackType === "openable";
+                // If openable, don't overlap, distribute evenly. Give 2px gap for mullion styling
+                const overlapFactor = isOpenableSystem ? 0 : 0.04;
+                
+                const panelW = isOpenableSystem 
+                    ? (frameW / sections) - 2
+                    : frameW * panel.widthRatio;
+                    
+                const panelX = isOpenableSystem 
+                    ? padding + (idx * (frameW / sections)) + 1
+                    : padding + (frameW * panel.offset);
+                
                 const panelY = padding + 6; // Inside frame
                 const panelH = frameH - 12;
 
@@ -162,12 +160,23 @@ export default function WindowSchematic({ trackType, configuration, className = 
                             strokeWidth="1"
                             opacity="0.5"
                         />
-                        {/* Direction Arrow (Symbolic) */}
-                        <path
-                            d={`M ${panelX + panelW - 20} ${panelY + panelH / 2} l -6 -4 v 8 z`}
-                            fill={isMosquito ? "#64748b" : "#60a5fa"}
-                            opacity="0.6"
-                        />
+                        {/* Direction/Hinge Symbol */}
+                        {!isOpenableSystem ? (
+                            <path
+                                d={`M ${panelX + panelW - 20} ${panelY + panelH / 2} l -6 -4 v 8 z`}
+                                fill={isMosquito ? "#64748b" : "#60a5fa"}
+                                opacity="0.6"
+                            />
+                        ) : (
+                            <path 
+                                d={`M ${panelX + 4} ${panelY + 4} L ${panelX + panelW - 4} ${panelY + panelH / 2} L ${panelX + 4} ${panelY + panelH - 4}`}
+                                fill="none"
+                                stroke="#94a3b8" 
+                                strokeWidth="1"
+                                strokeDasharray="3 3"
+                                opacity="0.6"
+                            />
+                        )}
                         {/* Config Label */}
                         <text
                             x={panelX + (panelW / 2)}
@@ -178,7 +187,7 @@ export default function WindowSchematic({ trackType, configuration, className = 
                             fontWeight="bold"
                             opacity="0.8"
                         >
-                            {isMosquito ? "MESH" : "GLASS"}
+                            {isOpenableSystem && configuration === "glass-mosquito" ? "G+M" : (isMosquito ? "MESH" : "GLASS")}
                         </text>
                     </g>
                 );

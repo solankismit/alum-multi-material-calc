@@ -8,16 +8,21 @@ import { revalidateTag } from "next/cache";
 const sectionSchema = z.object({
     name: z.string().min(1, "Name is required"),
     isActive: z.boolean().default(true),
-    trackTypes: z.array(z.string()).min(1),
-    configs: z.array(z.string()).min(1),
+    systemType: z.string().default("sliding"),
+    trackTypes: z.array(z.string()).default([]),
+    configs: z.array(z.string()).default([]),
     configurations: z.array(z.object({
         trackType: z.string(),
         configuration: z.string(),
-        shutterWidthDeduction: z.number(),
-        heightDeduction: z.number(),
-        threeTrackWidthAddition: z.number(),
-        glassWidthDeduction: z.number(),
-        glassHeightDeduction: z.number(),
+        shutterWidthDeduction: z.number().default(0),
+        heightDeduction: z.number().default(0),
+        threeTrackWidthAddition: z.number().default(0),
+        glassWidthDeduction: z.number().default(0),
+        glassHeightDeduction: z.number().default(0),
+        outerFrameWidthDeduction: z.number().nullable().optional(),
+        outerFrameHeightDeduction: z.number().nullable().optional(),
+        mullionWidthDeduction: z.number().nullable().optional(),
+        mullionLengthDeduction: z.number().nullable().optional(),
         trackRailDeduction: z.number().default(0),
         separateMosquitoNet: z.boolean().default(false),
         differentFrameMaterials: z.boolean().default(false),
@@ -41,7 +46,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const { name, isActive, trackTypes, configs, configurations } = result.data;
+        const { name, isActive, systemType, trackTypes, configs, configurations } = result.data;
 
         // Transaction to create everything
         const section = await db.$transaction(async (tx) => {
@@ -49,6 +54,7 @@ export async function POST(req: NextRequest) {
                 data: {
                     name,
                     isActive,
+                    systemType,
                     trackTypes,
                     configs,
                     configurations: {

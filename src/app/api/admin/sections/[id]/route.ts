@@ -7,16 +7,21 @@ import { revalidateTag } from "next/cache";
 const sectionUpdateSchema = z.object({
     name: z.string().min(1, "Name is required"),
     isActive: z.boolean(),
-    trackTypes: z.array(z.string()).min(1),
-    configs: z.array(z.string()).min(1),
+    systemType: z.string().default("sliding"),
+    trackTypes: z.array(z.string()).default([]),
+    configs: z.array(z.string()).default([]),
     configurations: z.array(z.object({
         trackType: z.string(),
         configuration: z.string(),
-        shutterWidthDeduction: z.number(),
-        heightDeduction: z.number(),
-        threeTrackWidthAddition: z.number(),
-        glassWidthDeduction: z.number(),
-        glassHeightDeduction: z.number(),
+        shutterWidthDeduction: z.number().default(0),
+        heightDeduction: z.number().default(0),
+        threeTrackWidthAddition: z.number().default(0),
+        glassWidthDeduction: z.number().default(0),
+        glassHeightDeduction: z.number().default(0),
+        outerFrameWidthDeduction: z.number().nullable().optional(),
+        outerFrameHeightDeduction: z.number().nullable().optional(),
+        mullionWidthDeduction: z.number().nullable().optional(),
+        mullionLengthDeduction: z.number().nullable().optional(),
         trackRailDeduction: z.number().default(0),
         separateMosquitoNet: z.boolean().default(false),
         differentFrameMaterials: z.boolean().default(false),
@@ -101,7 +106,7 @@ export async function PUT(
             );
         }
 
-        const { name, isActive, trackTypes, configs, configurations } = result.data;
+        const { name, isActive, systemType, trackTypes, configs, configurations } = result.data;
 
         // Full replacement of relations for simplicity (delete all -> create all)
         // In a real production app with massive data, we'd do differential updates.
@@ -109,7 +114,7 @@ export async function PUT(
             // Update basic info
             await tx.sectionType.update({
                 where: { id },
-                data: { name, isActive, trackTypes, configs }
+                data: { name, isActive, systemType, trackTypes, configs }
             });
 
             // Replace configs
@@ -123,6 +128,10 @@ export async function PUT(
                     threeTrackWidthAddition: Number(c.threeTrackWidthAddition),
                     glassWidthDeduction: Number(c.glassWidthDeduction),
                     glassHeightDeduction: Number(c.glassHeightDeduction),
+                    outerFrameWidthDeduction: c.outerFrameWidthDeduction != null ? Number(c.outerFrameWidthDeduction) : null,
+                    outerFrameHeightDeduction: c.outerFrameHeightDeduction != null ? Number(c.outerFrameHeightDeduction) : null,
+                    mullionWidthDeduction: c.mullionWidthDeduction != null ? Number(c.mullionWidthDeduction) : null,
+                    mullionLengthDeduction: c.mullionLengthDeduction != null ? Number(c.mullionLengthDeduction) : null,
                     trackRailDeduction: Number(c.trackRailDeduction || 0),
                     separateMosquitoNet: Boolean(c.separateMosquitoNet),
                     differentFrameMaterials: Boolean(c.differentFrameMaterials),

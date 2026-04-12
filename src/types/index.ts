@@ -9,6 +9,7 @@ export interface WindowDimension {
   height: number | null;
   width: number | null;
   quantity: number | null;
+  sections?: number | null; // For openable windows
 }
 
 export interface WindowSection {
@@ -16,8 +17,8 @@ export interface WindowSection {
   sectionTypeId?: string; // Links back to the SectionType in the DB
   name: string;
   dimensions: WindowDimension[];
-  trackType: "2-track" | "3-track";
-  configuration: "all-glass" | "glass-mosquito";
+  trackType: "2-track" | "3-track" | "openable";
+  configuration: "all-glass" | "glass-mosquito" | string;
   mosquitoMeshGrade?: string; // e.g. "304 SS", "Fiber"
   stockMap?: MaterialStockMap;
 }

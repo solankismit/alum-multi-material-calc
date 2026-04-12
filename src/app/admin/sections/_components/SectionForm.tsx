@@ -26,6 +26,7 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
     const [loading, setLoading] = useState(false);
     const [name, setName] = useState(initialData?.name || "");
     const [isActive, setIsActive] = useState(initialData?.isActive ?? true);
+    const [systemType, setSystemType] = useState((initialData as any)?.systemType || "sliding");
 
     // Configurations
     const [configurations, setConfigurations] = useState<any[]>(initialData?.configurations || [
@@ -38,6 +39,10 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
             glassWidthDeduction: 0,
             glassHeightDeduction: 0,
             trackRailDeduction: 0,
+            outerFrameWidthDeduction: 0,
+            outerFrameHeightDeduction: 0,
+            mullionWidthDeduction: 0,
+            mullionLengthDeduction: 0,
             separateMosquitoNet: false,
             differentFrameMaterials: false,
         }
@@ -83,6 +88,7 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
         const payload = {
             name,
             isActive,
+            systemType,
             trackTypes,
             configs,
             configurations: configurations.map(c => ({
@@ -92,6 +98,10 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                 threeTrackWidthAddition: Number(c.threeTrackWidthAddition),
                 glassWidthDeduction: Number(c.glassWidthDeduction),
                 glassHeightDeduction: Number(c.glassHeightDeduction),
+                outerFrameWidthDeduction: c.outerFrameWidthDeduction ? Number(c.outerFrameWidthDeduction) : null,
+                outerFrameHeightDeduction: c.outerFrameHeightDeduction ? Number(c.outerFrameHeightDeduction) : null,
+                mullionWidthDeduction: c.mullionWidthDeduction ? Number(c.mullionWidthDeduction) : null,
+                mullionLengthDeduction: c.mullionLengthDeduction ? Number(c.mullionLengthDeduction) : null,
                 trackRailDeduction: Number(c.trackRailDeduction || 0),
                 separateMosquitoNet: Boolean(c.separateMosquitoNet),
                 differentFrameMaterials: Boolean(c.differentFrameMaterials),
@@ -145,9 +155,23 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
 
             <div className="bg-white p-6 rounded-lg shadow space-y-4">
                 <h3 className="text-lg font-semibold">Basic Info</h3>
-                <div>
-                    <Label className="mb-1">Section Name</Label>
-                    <Input value={name} onChange={e => setName(e.target.value)} required placeholder="e.g. Domal 27mm" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <Label className="mb-1">Section Name</Label>
+                        <Input value={name} onChange={e => setName(e.target.value)} required placeholder="e.g. Domal 27mm" />
+                    </div>
+                    <div>
+                        <Label className="mb-1">System Class</Label>
+                        <Select value={systemType} onValueChange={setSystemType}>
+                            <SelectTrigger className="bg-white">
+                                <SelectValue placeholder="Select system class..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="sliding">Sliding Window</SelectItem>
+                                <SelectItem value="openable">Openable Window</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
             </div>
 
@@ -204,29 +228,52 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                             </div>
 
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <div>
-                                    <Label className="mb-1 text-xs">Shutter Width Deduction</Label>
-                                    <Input type="number" value={config.shutterWidthDeduction} onChange={e => handleConfigChange(i, "shutterWidthDeduction", Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label className="mb-1 text-xs">Height Deduction</Label>
-                                    <Input type="number" value={config.heightDeduction} onChange={e => handleConfigChange(i, "heightDeduction", Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label className="mb-1 text-xs">3-Track Width Addition</Label>
-                                    <Input type="number" value={config.threeTrackWidthAddition} onChange={e => handleConfigChange(i, "threeTrackWidthAddition", Number(e.target.value))} />
-                                </div>
+                                {systemType === "sliding" ? (
+                                    <>
+                                        <div>
+                                            <Label className="mb-1 text-xs">Shutter Width Deduction</Label>
+                                            <Input type="number" value={config.shutterWidthDeduction} onChange={e => handleConfigChange(i, "shutterWidthDeduction", Number(e.target.value))} />
+                                        </div>
+                                        <div>
+                                            <Label className="mb-1 text-xs">Height Deduction</Label>
+                                            <Input type="number" value={config.heightDeduction} onChange={e => handleConfigChange(i, "heightDeduction", Number(e.target.value))} />
+                                        </div>
+                                        <div>
+                                            <Label className="mb-1 text-xs">3-Track Width Addition</Label>
+                                            <Input type="number" value={config.threeTrackWidthAddition} onChange={e => handleConfigChange(i, "threeTrackWidthAddition", Number(e.target.value))} />
+                                        </div>
+                                        <div>
+                                            <Label className="mb-1 text-xs">Track Rail Deduction</Label>
+                                            <Input type="number" value={config.trackRailDeduction || 0} onChange={e => handleConfigChange(i, "trackRailDeduction", Number(e.target.value))} />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <Label className="mb-1 text-xs">Outer Frame Width Deduction</Label>
+                                            <Input type="number" step="0.001" value={config.outerFrameWidthDeduction || 0} onChange={e => handleConfigChange(i, "outerFrameWidthDeduction", Number(e.target.value))} />
+                                        </div>
+                                        <div>
+                                            <Label className="mb-1 text-xs">Outer Frame Height Deduction</Label>
+                                            <Input type="number" step="0.001" value={config.outerFrameHeightDeduction || 0} onChange={e => handleConfigChange(i, "outerFrameHeightDeduction", Number(e.target.value))} />
+                                        </div>
+                                        <div>
+                                            <Label className="mb-1 text-xs">Mullion Width Deduction</Label>
+                                            <Input type="number" step="0.001" value={config.mullionWidthDeduction || 0} onChange={e => handleConfigChange(i, "mullionWidthDeduction", Number(e.target.value))} />
+                                        </div>
+                                        <div>
+                                            <Label className="mb-1 text-xs">Mullion Length Deduction</Label>
+                                            <Input type="number" step="0.001" value={config.mullionLengthDeduction || 0} onChange={e => handleConfigChange(i, "mullionLengthDeduction", Number(e.target.value))} />
+                                        </div>
+                                    </>
+                                )}
                                 <div>
                                     <Label className="mb-1 text-xs">Glass Width Deduction</Label>
-                                    <Input type="number" value={config.glassWidthDeduction} onChange={e => handleConfigChange(i, "glassWidthDeduction", Number(e.target.value))} />
+                                    <Input type="number" step="0.001" value={config.glassWidthDeduction} onChange={e => handleConfigChange(i, "glassWidthDeduction", Number(e.target.value))} />
                                 </div>
                                 <div>
                                     <Label className="mb-1 text-xs">Glass Height Deduction</Label>
-                                    <Input type="number" value={config.glassHeightDeduction} onChange={e => handleConfigChange(i, "glassHeightDeduction", Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label className="mb-1 text-xs">Track Rail Deduction</Label>
-                                    <Input type="number" value={config.trackRailDeduction || 0} onChange={e => handleConfigChange(i, "trackRailDeduction", Number(e.target.value))} />
+                                    <Input type="number" step="0.001" value={config.glassHeightDeduction} onChange={e => handleConfigChange(i, "glassHeightDeduction", Number(e.target.value))} />
                                 </div>
                                 <div className="flex flex-col gap-2 pt-6">
                                     <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
