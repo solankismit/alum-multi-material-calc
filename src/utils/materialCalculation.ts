@@ -382,6 +382,7 @@ export function calculateSectionMaterials(
     trackType: "2-track" | "3-track" | "openable" | string;
     configuration: "all-glass" | "glass-mosquito" | string;
     systemType?: string;
+    hasTrackRail?: boolean;
   },
   sectionConfigData: SectionConfiguration & { systemType?: string },
   stockMap?: MaterialStockMap
@@ -433,7 +434,10 @@ export function calculateSectionMaterials(
   materials.push(createInterlockMaterial(interlockPieces, trackType, stockMap?.['interlock']));
 
   // Calculate track rail pieces
-  if (sectionConfig.calculateTrackRailPieces && sectionConfig.calculateTrackRailPieces != null) {
+  // Check both sectionConfig.hasTrackRail (from template) and section.hasTrackRail (from instance)
+  const effectiveHasTrackRail = sectionConfig.hasTrackRail && (section.hasTrackRail !== false);
+
+  if (effectiveHasTrackRail && sectionConfig.calculateTrackRailPieces && sectionConfig.calculateTrackRailPieces != null) {
     const trackRailMat = createTrackRailMaterial(validDimensions, sectionConfig.calculateTrackRailPieces, stockMap?.['trackRail']);
     if (trackRailMat) materials.push(trackRailMat);
   }

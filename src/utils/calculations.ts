@@ -40,6 +40,7 @@ export function calculateMaterials(
         dimensions: section.dimensions,
         trackType: section.trackType,
         configuration: section.configuration,
+        hasTrackRail: section.hasTrackRail,
       },
       sectionConfigData,
       section.stockMap

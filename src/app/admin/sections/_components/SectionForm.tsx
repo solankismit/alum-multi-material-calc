@@ -45,6 +45,7 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
             mullionLengthDeduction: 0,
             separateMosquitoNet: false,
             differentFrameMaterials: false,
+            hasTrackRail: true,
         }
     ]);
 
@@ -62,6 +63,7 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
             trackRailDeduction: 0,
             separateMosquitoNet: false,
             differentFrameMaterials: false,
+            hasTrackRail: true,
         }]);
     };
 
@@ -105,6 +107,7 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                 trackRailDeduction: Number(c.trackRailDeduction || 0),
                 separateMosquitoNet: Boolean(c.separateMosquitoNet),
                 differentFrameMaterials: Boolean(c.differentFrameMaterials),
+                hasTrackRail: Boolean(c.hasTrackRail ?? true),
             })),
 
         };
@@ -283,6 +286,10 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                                     <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
                                         <input type="checkbox" checked={config.differentFrameMaterials || false} onChange={e => handleConfigChange(i, "differentFrameMaterials", e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
                                         Split Frame Materials
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                                        <input type="checkbox" checked={config.hasTrackRail ?? true} onChange={e => handleConfigChange(i, "hasTrackRail", e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+                                        Include Track Rail
                                     </label>
                                 </div>
                             </div>

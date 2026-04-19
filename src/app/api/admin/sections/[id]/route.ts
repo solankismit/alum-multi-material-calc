@@ -25,6 +25,7 @@ const sectionUpdateSchema = z.object({
         trackRailDeduction: z.number().default(0),
         separateMosquitoNet: z.boolean().default(false),
         differentFrameMaterials: z.boolean().default(false),
+        hasTrackRail: z.boolean().default(true),
     })),
 });
 
@@ -135,6 +136,7 @@ export async function PUT(
                     trackRailDeduction: Number(c.trackRailDeduction || 0),
                     separateMosquitoNet: Boolean(c.separateMosquitoNet),
                     differentFrameMaterials: Boolean(c.differentFrameMaterials),
+                    hasTrackRail: Boolean(c.hasTrackRail ?? true),
                 }))
             });
 

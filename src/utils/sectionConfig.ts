@@ -22,6 +22,7 @@ export interface SectionTypeConfig {
   trackType: TrackType | string;
   configuration: Configuration | string;
   numberOfShutters: number; // Fallback for sliding
+  hasTrackRail: boolean;
   /**
    * Single source of truth: calculates all final dimensions at once
    */
@@ -98,6 +99,7 @@ export function getSectionConfig(
     trackType,
     configuration,
     numberOfShutters,
+    hasTrackRail: dbConfig.hasTrackRail ?? true,
     calculateFinalDimensions,
     calculateInterlockLength: (height: number) => {
       // PR states "Length = shutter height." The final shutter height IS finalDimensions.height

@@ -61,6 +61,7 @@ model SectionConfiguration {
   glassWidthDeduction      Float // glass width deduction (was a)
   glassHeightDeduction     Float // glass height deduction (was b)
   trackRailDeduction       Float @default(0) // width deduction for track rail
+  hasTrackRail             Boolean @default(true)
 
   // New generic deductions for Openable windows
   outerFrameWidthDeduction Float?

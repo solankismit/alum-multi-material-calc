@@ -49,6 +49,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
         ],
         trackType: "2-track",
         configuration: "all-glass",
+        hasTrackRail: true,
         stockMap: {},
       },
     ]);
@@ -104,6 +105,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
       ],
       trackType: "2-track",
       configuration: "all-glass",
+      hasTrackRail: true,
       stockMap: {},
     };
     setSections([...sections, newSection]);
@@ -293,6 +295,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
         ],
         trackType: "3-track",
         configuration: "glass-mosquito",
+        hasTrackRail: true,
       },
     ]);
     onReset();
@@ -514,6 +517,20 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                             <SelectItem value="Aluminum">Aluminum</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+                    )}
+
+                    {!isSystemOpenable && (
+                      <div className="flex items-center gap-2 pt-2 animate-in fade-in slide-in-from-top-2">
+                        <label className="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={section.hasTrackRail ?? true}
+                            onChange={(e) => updateSection(section.id, { hasTrackRail: e.target.checked })}
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          Include Track Rail
+                        </label>
                       </div>
                     )}
                   </div>

@@ -4,6 +4,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 const secretKey = process.env.AUTH_SECRET;
+if (!secretKey || secretKey.length === 0) {
+    throw new Error("AUTH_SECRET is not defined or is empty in environment variables");
+}
 const key = new TextEncoder().encode(secretKey);
 
 const COOKIE_NAME = "session";

@@ -26,6 +26,7 @@ const sectionSchema = z.object({
         trackRailDeduction: z.number().default(0),
         separateMosquitoNet: z.boolean().default(false),
         differentFrameMaterials: z.boolean().default(false),
+        hasTrackRail: z.boolean().default(true),
     })),
 });
 

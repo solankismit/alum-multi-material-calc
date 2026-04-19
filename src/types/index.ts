@@ -19,6 +19,7 @@ export interface WindowSection {
   dimensions: WindowDimension[];
   trackType: "2-track" | "3-track" | "openable";
   configuration: "all-glass" | "glass-mosquito" | string;
+  hasTrackRail?: boolean;
   mosquitoMeshGrade?: string; // e.g. "304 SS", "Fiber"
   stockMap?: MaterialStockMap;
 }
