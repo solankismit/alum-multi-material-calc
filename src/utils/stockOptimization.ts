@@ -6,6 +6,13 @@ export const STOCK_OPTIONS: StockOption[] = [
   { length: 3658, name: "12ft", lengthFeet: 12 },
 ];
 
+/**
+ * Kerf width in mm — material consumed by each aluminium saw cut.
+ * Each cut between pieces wastes this amount of stock.
+ * Standard aluminium profile saws waste ~2–3 mm per cut.
+ */
+export const KERF_WIDTH_MM = 3;
+
 export interface PieceRequirement {
   length: number;
   count: number;
@@ -22,7 +29,9 @@ export interface CombinedStockBreakdown extends StockBreakdown {
 }
 
 /**
- * Optimizes stock usage for a single piece type
+ * Optimizes stock usage for a single piece type.
+ * Tries all stock sizes and picks the one with the lowest wastage %.
+ * Accounts for kerf (saw blade width) between every cut.
  */
 export function optimizeStockUsage(
   requiredLength: number,
@@ -31,54 +40,54 @@ export function optimizeStockUsage(
 ): StockBreakdown {
   let bestOption: StockBreakdown | null = null;
   let minWastagePercent = Infinity;
-  let bestCuttingPlans: CuttingPlan[] = [];
 
   for (const stock of stockOptions) {
-    const piecesPerStock = Math.floor(stock.length / requiredLength);
+    // With kerf: N pieces fit when N*(L + K) - K ≤ S  →  N ≤ (S + K) / (L + K)
+    const piecesPerStock = Math.floor(
+      (stock.length + KERF_WIDTH_MM) / (requiredLength + KERF_WIDTH_MM)
+    );
     if (piecesPerStock === 0) continue;
 
     const stocksNeeded = Math.ceil(totalPieces / piecesPerStock);
-    const totalLength = stocksNeeded * stock.length;
-    const usedLength = totalPieces * requiredLength;
-    const wastage = totalLength - usedLength;
-    const wastagePercent = (wastage / totalLength) * 100;
 
-    // Generate cutting plans
+    // Generate cutting plans with kerf-aware wastage per bar
     const cuttingPlans: CuttingPlan[] = [];
     let remainingPieces = totalPieces;
+    let totalWastage = 0;
 
     for (let i = 0; i < stocksNeeded; i++) {
       const piecesFromThisStock = Math.min(piecesPerStock, remainingPieces);
-      const pieces: number[] = [];
-      for (let j = 0; j < piecesFromThisStock; j++) {
-        pieces.push(requiredLength);
-      }
-      const stockWastage = stock.length - piecesFromThisStock * requiredLength;
-      cuttingPlans.push({
-        stockIndex: i + 1,
-        pieces,
-        wastage: stockWastage,
-      });
+      const pieces: number[] = Array(piecesFromThisStock).fill(requiredLength);
+      // Kerf applies between pieces (N pieces = N-1 cuts)
+      const kerfInThisStock =
+        piecesFromThisStock > 1 ? (piecesFromThisStock - 1) * KERF_WIDTH_MM : 0;
+      const stockWastage =
+        stock.length - piecesFromThisStock * requiredLength - kerfInThisStock;
+      cuttingPlans.push({ stockIndex: i + 1, pieces, wastage: stockWastage });
+      totalWastage += stockWastage;
       remainingPieces -= piecesFromThisStock;
     }
 
+    const totalLength = stocksNeeded * stock.length;
+    const wastagePercent = (totalWastage / totalLength) * 100;
+
     if (wastagePercent < minWastagePercent) {
       minWastagePercent = wastagePercent;
-      bestCuttingPlans = cuttingPlans;
       bestOption = {
         stockLength: stock.length,
         stockName: stock.name,
         stocksNeeded,
         piecesPerStock,
-        totalWastage: wastage,
+        totalWastage,
         wastagePercent,
-        cuttingPlans: bestCuttingPlans,
+        cuttingPlans,
         requiredLength,
         totalPieces,
       };
     }
   }
 
+  // Fallback: piece is larger than every stock option — one piece per stock bar
   if (!bestOption && stockOptions.length > 0) {
     const largestStock = stockOptions[0];
     const cuttingPlans: CuttingPlan[] = [];
@@ -89,23 +98,20 @@ export function optimizeStockUsage(
         wastage: largestStock.length - requiredLength,
       });
     }
+    const totalWastage = totalPieces * (largestStock.length - requiredLength);
     bestOption = {
       stockLength: largestStock.length,
       stockName: largestStock.name,
       stocksNeeded: totalPieces,
       piecesPerStock: 1,
-      totalWastage: totalPieces * (largestStock.length - requiredLength),
-      wastagePercent:
-        ((totalPieces * (largestStock.length - requiredLength)) /
-          (totalPieces * largestStock.length)) *
-        100,
+      totalWastage,
+      wastagePercent: (totalWastage / (totalPieces * largestStock.length)) * 100,
       cuttingPlans,
       requiredLength,
       totalPieces,
     };
   }
 
-  // Fallback if still null (e.g. empty stockOptions passed)
   if (!bestOption) {
     throw new Error("No valid stock options provided");
   }
@@ -114,7 +120,11 @@ export function optimizeStockUsage(
 }
 
 /**
- * Packs pieces into a single stock using greedy algorithm
+ * Packs as many pieces as possible into a single stock bar using a greedy
+ * largest-first strategy. Accounts for kerf between consecutive cuts.
+ *
+ * Returns the pieces packed, absolute wastage, and remaining unplaced count.
+ * NOTE: This function does NOT mutate the `remainingPieces` argument.
  */
 export function packStock(
   stock: StockOption,
@@ -122,19 +132,23 @@ export function packStock(
 ): {
   pieces: { length: number; type: string }[];
   wastage: number;
+  /** Total count of pieces that could not be placed (for external use). */
   remaining: number;
 } {
   const pieces: { length: number; type: string }[] = [];
   let usedLength = 0;
   const tempRemaining = remainingPieces.map((p) => ({ ...p }));
 
-  // Sort pieces by length (largest first) for better packing
+  // Largest pieces first for better fill rate
   const sortedPieces = [...tempRemaining].sort((a, b) => b.length - a.length);
 
   for (const req of sortedPieces) {
-    while (req.count > 0 && usedLength + req.length <= stock.length) {
+    while (req.count > 0) {
+      // First piece has no preceding kerf; every subsequent cut adds KERF_WIDTH_MM
+      const kerfCost = pieces.length > 0 ? KERF_WIDTH_MM : 0;
+      if (usedLength + kerfCost + req.length > stock.length) break;
+      usedLength += kerfCost + req.length;
       pieces.push({ length: req.length, type: req.type });
-      usedLength += req.length;
       req.count--;
     }
   }
@@ -145,66 +159,65 @@ export function packStock(
   return { pieces, wastage, remaining };
 }
 
+// ─── Internal helper ─────────────────────────────────────────────────────────
+
 /**
- * Optimizes stock usage for multiple piece types using bin packing
+ * Runs one greedy bin-packing pass over all pieces using the given stock options.
+ * At each step, picks the stock whose wastage PERCENTAGE is lowest (not absolute),
+ * which avoids the trap of preferring a smaller bar with lower absolute waste but
+ * higher overall waste when aggregated.
+ *
+ * Returns null if any pieces cannot be placed (piece larger than all stocks).
  */
-export function optimizeCombinedStockUsage(
+function runGreedyPack(
   pieceRequirements: PieceRequirement[],
-  stockOptions: StockOption[] = STOCK_OPTIONS
-): CombinedStockBreakdown {
-  let bestSolution: {
-    stockCounts: { [stockName: string]: number };
-    cuttingPlans: CuttingPlan[];
-    totalWastage: number;
-    totalStockLength: number;
-    pieceBreakdown: { [type: string]: number };
-  } | null = null;
-  let minWastagePercent = Infinity;
-
-  // Use passed stockOptions
-  const currentStockOptions = stockOptions.length > 0 ? stockOptions : STOCK_OPTIONS;
-
-  // Pack pieces into stocks using greedy algorithm
+  availableStocks: StockOption[]
+): {
+  stockCounts: { [stockName: string]: number };
+  cuttingPlans: CuttingPlan[];
+  totalWastage: number;
+  totalStockLength: number;
+  pieceBreakdown: { [type: string]: number };
+} | null {
   const stockCounts: { [stockName: string]: number } = {};
   const cuttingPlans: CuttingPlan[] = [];
   const pieceBreakdown: { [type: string]: number } = {};
-
-  // Initialize piece counts
   const remainingPieces: PieceRequirement[] = pieceRequirements.map((p) => ({
     ...p,
-    count: p.count,
   }));
 
   let stockIndex = 1;
   let totalStockLength = 0;
   let totalWastage = 0;
 
-  // Pack pieces into stocks
   while (remainingPieces.some((p) => p.count > 0)) {
-    // Try each stock size and pick the best one
     let bestStock: StockOption | null = null;
     let bestPieces: { length: number; type: string }[] = [];
-    let bestWastage = Infinity;
+    let bestWastage = 0;
+    let bestWastagePercent = Infinity;
 
-    // Try each stock size
-    for (const stock of currentStockOptions) {
+    for (const stock of availableStocks) {
       const packed = packStock(stock, remainingPieces);
-      if (packed.pieces.length > 0 && packed.wastage < bestWastage) {
-        bestStock = stock;
-        bestPieces = packed.pieces;
-        bestWastage = packed.wastage;
+      if (packed.pieces.length > 0) {
+        // Compare wastage as a fraction of bar length, not absolute mm
+        const wastagePercent = packed.wastage / stock.length;
+        if (wastagePercent < bestWastagePercent) {
+          bestStock = stock;
+          bestPieces = packed.pieces;
+          bestWastage = packed.wastage;
+          bestWastagePercent = wastagePercent;
+        }
       }
     }
 
-    if (!bestStock || bestPieces.length === 0) break;
+    // No stock can fit any remaining piece (all pieces exceed every stock size)
+    if (!bestStock || bestPieces.length === 0) return null;
 
-    // Use the best stock
     const stockName = bestStock.name;
     stockCounts[stockName] = (stockCounts[stockName] || 0) + 1;
     totalStockLength += bestStock.length;
     totalWastage += bestWastage;
 
-    // Update remaining pieces
     const pieceTypes: string[] = [];
     bestPieces.forEach((piece) => {
       const req = remainingPieces.find(
@@ -219,43 +232,79 @@ export function optimizeCombinedStockUsage(
 
     cuttingPlans.push({
       stockIndex: stockIndex++,
-      stockName: stockName,
+      stockName,
       pieces: bestPieces.map((p) => p.length),
       pieceTypes,
       wastage: bestWastage,
     });
 
-    // Remove exhausted piece types
-    remainingPieces.forEach((req) => {
-      if (req.count <= 0) {
-        const index = remainingPieces.indexOf(req);
-        if (index > -1) remainingPieces.splice(index, 1);
+    // Remove exhausted piece types — iterate backwards to avoid skipping
+    // elements when splicing (the old forEach+splice had a mutation bug).
+    for (let i = remainingPieces.length - 1; i >= 0; i--) {
+      if (remainingPieces[i].count <= 0) {
+        remainingPieces.splice(i, 1);
       }
-    });
-  }
-
-  // Check if all pieces are packed
-  const allPacked =
-    remainingPieces.length === 0 || remainingPieces.every((p) => p.count === 0);
-  if (allPacked) {
-    const wastagePercent = (totalWastage / totalStockLength) * 100;
-    if (wastagePercent < minWastagePercent) {
-      minWastagePercent = wastagePercent;
-      bestSolution = {
-        stockCounts,
-        cuttingPlans,
-        totalWastage,
-        totalStockLength,
-        pieceBreakdown,
-      };
     }
   }
 
-  // If no solution found, use fallback
+  return { stockCounts, cuttingPlans, totalWastage, totalStockLength, pieceBreakdown };
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Optimizes stock usage for multiple piece types using bin packing.
+ *
+ * Strategy: tries N+1 solutions and keeps the one with lowest waste %:
+ *   • One solution per stock size used exclusively  (N solutions)
+ *   • One mixed-stock greedy solution               (1 solution)
+ *
+ * This avoids the previous single-pass issue where minWastagePercent was
+ * always Infinity and only one greedy path was ever evaluated.
+ */
+export function optimizeCombinedStockUsage(
+  pieceRequirements: PieceRequirement[],
+  stockOptions: StockOption[] = STOCK_OPTIONS
+): CombinedStockBreakdown {
+  const currentStockOptions =
+    stockOptions.length > 0 ? stockOptions : STOCK_OPTIONS;
+
+  let bestSolution: {
+    stockCounts: { [stockName: string]: number };
+    cuttingPlans: CuttingPlan[];
+    totalWastage: number;
+    totalStockLength: number;
+    pieceBreakdown: { [type: string]: number };
+  } | null = null;
+  let minWastagePercent = Infinity;
+
+  const tryAndKeepBest = (
+    result: ReturnType<typeof runGreedyPack>
+  ) => {
+    if (!result) return;
+    const wastagePercent =
+      result.totalStockLength > 0
+        ? (result.totalWastage / result.totalStockLength) * 100
+        : 0;
+    if (wastagePercent < minWastagePercent) {
+      minWastagePercent = wastagePercent;
+      bestSolution = result;
+    }
+  };
+
+  // Strategy A: each stock size used exclusively
+  for (const stock of currentStockOptions) {
+    tryAndKeepBest(runGreedyPack(pieceRequirements, [stock]));
+  }
+
+  // Strategy B: mixed-stock greedy (best wastage % per iteration)
+  tryAndKeepBest(runGreedyPack(pieceRequirements, currentStockOptions));
+
+  // Fallback: piece(s) exceed every available stock — one piece per bar
   if (!bestSolution) {
     const largestStock = currentStockOptions[0];
-    const cuttingPlans: CuttingPlan[] = [];
-    let stockIndex = 1;
+    const fallbackCuttingPlans: CuttingPlan[] = [];
+    let stockIdx = 1;
     let totalStockLength = 0;
     let totalWastage = 0;
     const stockCounts: { [stockName: string]: number } = {};
@@ -268,8 +317,8 @@ export function optimizeCombinedStockUsage(
         totalStockLength += largestStock.length;
         totalWastage += largestStock.length - req.length;
         pieceBreakdown[req.type] = (pieceBreakdown[req.type] || 0) + 1;
-        cuttingPlans.push({
-          stockIndex: stockIndex++,
+        fallbackCuttingPlans.push({
+          stockIndex: stockIdx++,
           pieces: [req.length],
           pieceTypes: [req.type],
           wastage: largestStock.length - req.length,
@@ -279,28 +328,27 @@ export function optimizeCombinedStockUsage(
 
     bestSolution = {
       stockCounts,
-      cuttingPlans,
+      cuttingPlans: fallbackCuttingPlans,
       totalWastage,
       totalStockLength,
       pieceBreakdown,
     };
   }
 
-  // Calculate total pieces
   const totalPieces = pieceRequirements.reduce((sum, p) => sum + p.count, 0);
   const totalStocks = Object.values(bestSolution.stockCounts).reduce(
     (sum, count) => sum + count,
     0
   );
-  const avgPiecesPerStock = totalPieces / totalStocks;
+  const avgPiecesPerStock = totalStocks > 0 ? totalPieces / totalStocks : 0;
 
-  // Determine primary stock (most used)
   const primaryStockName =
     Object.entries(bestSolution.stockCounts).sort(
       (a, b) => b[1] - a[1]
     )[0]?.[0] || currentStockOptions[0].name;
   const primaryStock =
-    currentStockOptions.find((s) => s.name === primaryStockName) || currentStockOptions[0];
+    currentStockOptions.find((s) => s.name === primaryStockName) ||
+    currentStockOptions[0];
 
   return {
     stockLength: primaryStock.length,
@@ -309,7 +357,9 @@ export function optimizeCombinedStockUsage(
     piecesPerStock: Math.round(avgPiecesPerStock * 100) / 100,
     totalWastage: bestSolution.totalWastage,
     wastagePercent:
-      (bestSolution.totalWastage / bestSolution.totalStockLength) * 100,
+      bestSolution.totalStockLength > 0
+        ? (bestSolution.totalWastage / bestSolution.totalStockLength) * 100
+        : 0,
     cuttingPlans: bestSolution.cuttingPlans,
     pieceBreakdown: bestSolution.pieceBreakdown,
     allStockCounts: bestSolution.stockCounts,

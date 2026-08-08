@@ -12,7 +12,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/Select";
-import { Plus, Trash2, Save, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, Wand2 } from "lucide-react";
 import type { SectionWithConfigs } from "@/types";
 import { uiStyles } from "@/lib/utils";
 
@@ -65,16 +65,200 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
             differentFrameMaterials: false,
             hasTrackRail: true,
         }]);
+        setExamples([...examples, {}]);
+        setExamplesB([...examplesB, {}]);
+        setShowSecondExample([...showSecondExample, false]);
     };
 
     const handleRemoveConfig = (index: number) => {
         setConfigurations(configurations.filter((_, i) => i !== index));
+        setExamples(examples.filter((_, i) => i !== index));
+        setExamplesB(examplesB.filter((_, i) => i !== index));
+        setShowSecondExample(showSecondExample.filter((_, i) => i !== index));
     };
 
     const handleConfigChange = (index: number, field: string, value: any) => {
         const newConfigs = [...configurations];
         newConfigs[index] = { ...newConfigs[index], [field]: value };
         setConfigurations(newConfigs);
+    };
+
+    // "Derive from example" — enter a real sample window and the measured
+    // result (shutter/glass size), and the deduction constants are back-solved
+    // from the same formulas the calculator already uses. Never guesses at
+    // new physics: it only inverts sectionConfig.ts's existing equations.
+    const [examples, setExamples] = useState<Record<string, string>[]>(
+        (initialData?.configurations || [{}]).map(() => ({}))
+    );
+    // Second example — only needed for Openable profiles with 2+ panels, to
+    // solve outerFrameWidthDeduction and mullionWidthDeduction jointly (one
+    // example alone is one equation with two unknowns; see handleDerive).
+    const [examplesB, setExamplesB] = useState<Record<string, string>[]>(
+        (initialData?.configurations || [{}]).map(() => ({}))
+    );
+    const [showSecondExample, setShowSecondExample] = useState<boolean[]>(
+        (initialData?.configurations || [{}]).map(() => false)
+    );
+
+    const handleExampleChange = (index: number, field: string, value: string) => {
+        const newExamples = [...examples];
+        newExamples[index] = { ...newExamples[index], [field]: value };
+        setExamples(newExamples);
+    };
+
+    const handleExampleBChange = (index: number, field: string, value: string) => {
+        const newExamples = [...examplesB];
+        newExamples[index] = { ...newExamples[index], [field]: value };
+        setExamplesB(newExamples);
+    };
+
+    const toggleSecondExample = (index: number) => {
+        const next = [...showSecondExample];
+        next[index] = !next[index];
+        setShowSecondExample(next);
+    };
+
+    const round = (n: number) => Math.round(n * 1000) / 1000;
+
+    // After deriving, recompute forward through the same formulas using ONLY
+    // the newly stored constants + the sample size — independent of the typed
+    // "resulting" values — and show the prediction next to what was typed.
+    // If they match, the round-trip (invert → save → forward) is provably
+    // consistent, not just assumed.
+    type VerifyLine = { label: string; expected: number; predicted: number };
+    const [verifyResults, setVerifyResults] = useState<Record<number, VerifyLine[]>>({});
+
+    const handleDerive = (index: number) => {
+        const ex = examples[index] || {};
+        const exB = examplesB[index] || {};
+        const config = configurations[index];
+        const num = (v: string | undefined) => (v === "" || v === undefined ? NaN : Number(v));
+
+        const sampleW = num(ex.sampleWidth);
+        const sampleH = num(ex.sampleHeight);
+        const shutterW = num(ex.resultShutterWidth);
+        const shutterH = num(ex.resultShutterHeight);
+        const glassW = num(ex.resultGlassWidth);
+        const glassH = num(ex.resultGlassHeight);
+
+        if (isNaN(sampleW) || isNaN(sampleH) || isNaN(shutterW) || isNaN(shutterH)) {
+            alert("Fill in the sample window size and the resulting shutter size at minimum.");
+            return;
+        }
+
+        const updates: Record<string, number> = {};
+
+        if (systemType === "sliding") {
+            if (config.trackType === "3-track" && config.configuration === "all-glass") {
+                updates.threeTrackWidthAddition = round(3 * shutterW - sampleW);
+            } else {
+                updates.shutterWidthDeduction = round(sampleW / 2 - shutterW);
+            }
+            updates.heightDeduction = round(sampleH - shutterH);
+
+            const trackRailLen = num(ex.resultTrackRailLength);
+            if (!isNaN(trackRailLen)) {
+                updates.trackRailDeduction = round(sampleW - trackRailLen);
+            }
+        } else {
+            const n1 = Math.max(1, num(ex.panels) || 1);
+            updates.outerFrameHeightDeduction = round(sampleH - shutterH);
+
+            const n2 = Math.max(1, num(exB.panels) || 1);
+            const sampleWB = num(exB.sampleWidth);
+            const shutterWB = num(exB.resultShutterWidth);
+            const secondExampleUsable =
+                showSecondExample[index] && !isNaN(sampleWB) && !isNaN(shutterWB) && n2 !== n1;
+
+            if (secondExampleUsable) {
+                // Two examples, two unknowns — solved exactly, not assumed.
+                const remainderA = sampleW - n1 * shutterW; // = outer + (n1-1)*mullion
+                const remainderB = sampleWB - n2 * shutterWB; // = outer + (n2-1)*mullion
+                const mullionWidthDeduction = round((remainderA - remainderB) / (n1 - n2));
+                updates.mullionWidthDeduction = mullionWidthDeduction;
+                updates.outerFrameWidthDeduction = round(remainderA - (n1 - 1) * mullionWidthDeduction);
+            } else {
+                if (n1 > 1) {
+                    alert(
+                        "This example alone can't solve Mullion Width Deduction (one equation, two unknowns). " +
+                        "Outer Frame Width Deduction below was computed assuming the current Mullion Width Deduction value is correct — " +
+                        "add a second example with a different panel count to solve both exactly."
+                    );
+                }
+                const mullionWidthDeduction = Number(config.mullionWidthDeduction) || 0;
+                updates.outerFrameWidthDeduction = round(
+                    sampleW - n1 * shutterW - (n1 - 1) * mullionWidthDeduction
+                );
+            }
+
+            // Mullion piece length is independent of panel count — solvable from
+            // either example alone, given the mullion's actual cut length.
+            const mullionLenA = num(ex.resultMullionLength);
+            const mullionLenB = num(exB.resultMullionLength);
+            if (!isNaN(mullionLenA)) {
+                updates.mullionLengthDeduction = round(sampleH - mullionLenA);
+            } else if (!isNaN(mullionLenB) && !isNaN(sampleH)) {
+                const sampleHB = num(exB.sampleHeight);
+                if (!isNaN(sampleHB)) updates.mullionLengthDeduction = round(sampleHB - mullionLenB);
+            }
+        }
+
+        if (!isNaN(glassW)) updates.glassWidthDeduction = round(shutterW - glassW);
+        if (!isNaN(glassH)) updates.glassHeightDeduction = round(shutterH - glassH);
+
+        const newConfigs = [...configurations];
+        newConfigs[index] = { ...newConfigs[index], ...updates };
+        setConfigurations(newConfigs);
+
+        // Build the verification: forward-calculate from the sample size using
+        // only the just-derived constants, and compare against what was typed.
+        const final = { ...config, ...updates };
+        const lines: VerifyLine[] = [];
+
+        if (systemType === "sliding") {
+            const predShutterW =
+                config.trackType === "3-track" && config.configuration === "all-glass"
+                    ? (sampleW + final.threeTrackWidthAddition) / 3
+                    : sampleW / 2 - final.shutterWidthDeduction;
+            const predShutterH = sampleH - final.heightDeduction;
+            lines.push({ label: "Shutter Width", expected: shutterW, predicted: round(predShutterW) });
+            lines.push({ label: "Shutter Height", expected: shutterH, predicted: round(predShutterH) });
+
+            if (!isNaN(glassW)) lines.push({ label: "Glass Width", expected: glassW, predicted: round(predShutterW - final.glassWidthDeduction) });
+            if (!isNaN(glassH)) lines.push({ label: "Glass Height", expected: glassH, predicted: round(predShutterH - final.glassHeightDeduction) });
+
+            const trackRailLen = num(ex.resultTrackRailLength);
+            if (!isNaN(trackRailLen)) lines.push({ label: "Track Rail Length", expected: trackRailLen, predicted: round(sampleW - final.trackRailDeduction) });
+        } else {
+            const n1 = Math.max(1, num(ex.panels) || 1);
+            const finalMullion = Number(final.mullionWidthDeduction) || 0;
+            const predShutterW = (sampleW - final.outerFrameWidthDeduction - (n1 - 1) * finalMullion) / n1;
+            const predShutterH = sampleH - final.outerFrameHeightDeduction;
+            lines.push({ label: "Shutter Width (example A)", expected: shutterW, predicted: round(predShutterW) });
+            lines.push({ label: "Shutter Height (example A)", expected: shutterH, predicted: round(predShutterH) });
+
+            if (!isNaN(glassW)) lines.push({ label: "Glass Width", expected: glassW, predicted: round(predShutterW - final.glassWidthDeduction) });
+            if (!isNaN(glassH)) lines.push({ label: "Glass Height", expected: glassH, predicted: round(predShutterH - final.glassHeightDeduction) });
+
+            const n2 = Math.max(1, num(exB.panels) || 1);
+            const shutterWB = num(exB.resultShutterWidth);
+            if (showSecondExample[index] && !isNaN(shutterWB) && n2 !== n1) {
+                const sampleWB = num(exB.sampleWidth);
+                const predShutterWB = (sampleWB - final.outerFrameWidthDeduction - (n2 - 1) * finalMullion) / n2;
+                lines.push({ label: "Shutter Width (example B)", expected: shutterWB, predicted: round(predShutterWB) });
+            }
+
+            const mullionLenA = num(ex.resultMullionLength);
+            const mullionLenB = num(exB.resultMullionLength);
+            if (!isNaN(mullionLenA)) {
+                lines.push({ label: "Mullion Piece Length", expected: mullionLenA, predicted: round(sampleH - final.mullionLengthDeduction) });
+            } else if (!isNaN(mullionLenB)) {
+                const sampleHB = num(exB.sampleHeight);
+                if (!isNaN(sampleHB)) lines.push({ label: "Mullion Piece Length (example B)", expected: mullionLenB, predicted: round(sampleHB - final.mullionLengthDeduction) });
+            }
+        }
+
+        setVerifyResults(prev => ({ ...prev, [index]: lines }));
     };
 
 
@@ -228,6 +412,124 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                                         </SelectContent>
                                     </Select>
                                 </div>
+                            </div>
+
+                            <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 space-y-3">
+                                <div className="flex items-center gap-2 text-xs font-semibold text-indigo-900">
+                                    <Wand2 className="w-3.5 h-3.5" />
+                                    Derive from example (optional) — enter a real window and its measured result, the deductions below get filled in for you
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div>
+                                        <Label className="mb-1 text-[11px] text-slate-600">Sample Window Width</Label>
+                                        <Input type="number" placeholder="e.g. 2382" value={examples[i]?.sampleWidth ?? ""} onChange={e => handleExampleChange(i, "sampleWidth", e.target.value)} className="bg-white" />
+                                    </div>
+                                    <div>
+                                        <Label className="mb-1 text-[11px] text-slate-600">Sample Window Height</Label>
+                                        <Input type="number" placeholder="e.g. 1428" value={examples[i]?.sampleHeight ?? ""} onChange={e => handleExampleChange(i, "sampleHeight", e.target.value)} className="bg-white" />
+                                    </div>
+                                    {systemType !== "sliding" && (
+                                        <div>
+                                            <Label className="mb-1 text-[11px] text-slate-600">Panels</Label>
+                                            <Input type="number" min="1" placeholder="e.g. 2" value={examples[i]?.panels ?? ""} onChange={e => handleExampleChange(i, "panels", e.target.value)} className="bg-white" />
+                                        </div>
+                                    )}
+                                    <div>
+                                        <Label className="mb-1 text-[11px] text-slate-600">Resulting Shutter Width</Label>
+                                        <Input type="number" placeholder="e.g. 1191" value={examples[i]?.resultShutterWidth ?? ""} onChange={e => handleExampleChange(i, "resultShutterWidth", e.target.value)} className="bg-white" />
+                                    </div>
+                                    <div>
+                                        <Label className="mb-1 text-[11px] text-slate-600">Resulting Shutter Height</Label>
+                                        <Input type="number" placeholder="e.g. 1360" value={examples[i]?.resultShutterHeight ?? ""} onChange={e => handleExampleChange(i, "resultShutterHeight", e.target.value)} className="bg-white" />
+                                    </div>
+                                    <div>
+                                        <Label className="mb-1 text-[11px] text-slate-600">Resulting Glass Width</Label>
+                                        <Input type="number" placeholder="e.g. 1084" value={examples[i]?.resultGlassWidth ?? ""} onChange={e => handleExampleChange(i, "resultGlassWidth", e.target.value)} className="bg-white" />
+                                    </div>
+                                    <div>
+                                        <Label className="mb-1 text-[11px] text-slate-600">Resulting Glass Height</Label>
+                                        <Input type="number" placeholder="e.g. 1256" value={examples[i]?.resultGlassHeight ?? ""} onChange={e => handleExampleChange(i, "resultGlassHeight", e.target.value)} className="bg-white" />
+                                    </div>
+                                    {systemType === "sliding" && (
+                                        <div>
+                                            <Label className="mb-1 text-[11px] text-slate-600">Resulting Track Rail Length (optional)</Label>
+                                            <Input type="number" placeholder="e.g. 2332" value={examples[i]?.resultTrackRailLength ?? ""} onChange={e => handleExampleChange(i, "resultTrackRailLength", e.target.value)} className="bg-white" />
+                                        </div>
+                                    )}
+                                    {systemType !== "sliding" && (Number(examples[i]?.panels) || 1) > 1 && (
+                                        <div>
+                                            <Label className="mb-1 text-[11px] text-slate-600">Resulting Mullion Piece Length (optional)</Label>
+                                            <Input type="number" placeholder="e.g. 1474.6" value={examples[i]?.resultMullionLength ?? ""} onChange={e => handleExampleChange(i, "resultMullionLength", e.target.value)} className="bg-white" />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {systemType !== "sliding" && (Number(examples[i]?.panels) || 1) > 1 && !showSecondExample[i] && (
+                                    <div className="text-[11px] text-indigo-700 bg-indigo-100 rounded p-2">
+                                        A single multi-panel example cannot separate Outer Frame Width Deduction from Mullion Width Deduction — it is one equation with two unknowns.{" "}
+                                        <button type="button" className="underline font-semibold" onClick={() => toggleSecondExample(i)}>
+                                            Add a second example (different panel count) to solve both exactly
+                                        </button>
+                                        , or leave this and Compute will assume the current Mullion Width Deduction value below is correct.
+                                    </div>
+                                )}
+
+                                {showSecondExample[i] && (
+                                    <div className="rounded-lg border border-indigo-300 bg-white p-3 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-[11px] font-semibold text-indigo-900">Second example — use a different panel count than above</p>
+                                            <button type="button" className="text-[11px] text-slate-500 underline" onClick={() => toggleSecondExample(i)}>Remove</button>
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                            <div>
+                                                <Label className="mb-1 text-[11px] text-slate-600">Sample Window Width</Label>
+                                                <Input type="number" placeholder="e.g. 3000" value={examplesB[i]?.sampleWidth ?? ""} onChange={e => handleExampleBChange(i, "sampleWidth", e.target.value)} />
+                                            </div>
+                                            <div>
+                                                <Label className="mb-1 text-[11px] text-slate-600">Sample Window Height</Label>
+                                                <Input type="number" placeholder="e.g. 1500" value={examplesB[i]?.sampleHeight ?? ""} onChange={e => handleExampleBChange(i, "sampleHeight", e.target.value)} />
+                                            </div>
+                                            <div>
+                                                <Label className="mb-1 text-[11px] text-slate-600">Panels</Label>
+                                                <Input type="number" min="1" placeholder="e.g. 3" value={examplesB[i]?.panels ?? ""} onChange={e => handleExampleBChange(i, "panels", e.target.value)} />
+                                            </div>
+                                            <div>
+                                                <Label className="mb-1 text-[11px] text-slate-600">Resulting Shutter Width</Label>
+                                                <Input type="number" placeholder="e.g. 961.9" value={examplesB[i]?.resultShutterWidth ?? ""} onChange={e => handleExampleBChange(i, "resultShutterWidth", e.target.value)} />
+                                            </div>
+                                            <div>
+                                                <Label className="mb-1 text-[11px] text-slate-600">Resulting Mullion Piece Length (optional)</Label>
+                                                <Input type="number" placeholder="e.g. 1474.6" value={examplesB[i]?.resultMullionLength ?? ""} onChange={e => handleExampleBChange(i, "resultMullionLength", e.target.value)} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <Button type="button" size="sm" variant="secondary" onClick={() => handleDerive(i)}>
+                                    <Wand2 className="w-3.5 h-3.5 mr-2" />
+                                    Compute deductions from this example
+                                </Button>
+
+                                {verifyResults[i] && verifyResults[i].length > 0 && (() => {
+                                    const allOk = verifyResults[i].every(l => Math.abs(l.expected - l.predicted) < 0.01);
+                                    return (
+                                        <div className={`rounded-lg border p-3 text-xs ${allOk ? "border-green-300 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
+                                            <p className={`font-semibold mb-1.5 ${allOk ? "text-green-800" : "text-amber-800"}`}>
+                                                {allOk ? "✓ Verified — the saved deductions reproduce this example exactly" : "⚠ Mismatch — check the values below"}
+                                            </p>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1">
+                                                {verifyResults[i].map((l, li) => {
+                                                    const ok = Math.abs(l.expected - l.predicted) < 0.01;
+                                                    return (
+                                                        <div key={li} className={ok ? "text-green-700" : "text-amber-700"}>
+                                                            {l.label}: {l.predicted}{!ok && ` (typed ${l.expected})`}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

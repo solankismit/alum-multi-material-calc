@@ -42,7 +42,7 @@ export function calculateMaterials(
         configuration: section.configuration,
         hasTrackRail: section.hasTrackRail,
       },
-      sectionConfigData,
+      { ...sectionConfigData, systemType: sectionTypeData?.systemType },
       section.stockMap
     );
 
@@ -53,30 +53,39 @@ export function calculateMaterials(
     let sectionMosquitoArea = 0;
 
     materialsResult.glassInfo.forEach((glass) => {
-      // Find dimension to get quantity
-      const dim = section.dimensions.find(d => d.id === glass.dimensionId);
+      // Find the matching dimension to get quantity and sections count
+      const dim = section.dimensions.find((d) => d.id === glass.dimensionId);
       const qty = dim?.quantity || 1;
+      // area of one glass pane (single shutter, no quantity factor)
       const areaPerShutter = glass.glassSize.area;
 
-      if (sectionConfigData.separateMosquitoNet && section.configuration === "glass-mosquito") {
-        // 2 mosquito shutters, (numberOfShutters - 1) glass shutters based on my previous Shutter Pieces logic
-        // Wait, previous logic was: 1 mosquito shutter, `numberOfShutters - 1` glass shutters per window
-        // Ah, actually my shutter piece calculation did: 2 mosquito *pieces* per dimension (which is 1 mosquito shutter per window, right? Height is 2 pieces, width is 2 pieces = 1 shutter!).
-        // So mosquito area is `areaPerShutter * 1 * qty`.
-        // Let's verify: 
-        // `mosquitoHeightPieces.push({ length: finalDims.height, count: 2 * dim.quantity })` -> this is 2 vertical pieces per window, which means 1 Mosquito Shutter per window!
-        // Yes! 1 shutter has 2 height pieces and 2 width pieces.
-        // So: glass shutters = `numberOfShutters - 1`
-        const trackCount = parseInt(section.trackType.charAt(0));
-        // We know for mosquito the shutter count is trackCount (2 track = 2 shutter, 3 track = 3 shutter usually). 
-        // 1 mosquito shutter, so glass is trackCount - 1
-        const glassShuttersCount = trackCount - 1;
+      if (
+        sectionConfigData.separateMosquitoNet &&
+        section.configuration === "glass-mosquito"
+      ) {
+        // Determine total shutter count safely — never use parseInt on trackType
+        // because "openable".charAt(0) → NaN.
+        let totalShutterCount: number;
+        if (section.trackType === "openable") {
+          // For openable windows the number of panels is stored on the dimension
+          totalShutterCount = (dim?.sections && dim.sections > 0 ? dim.sections : 2);
+        } else if (section.trackType === "3-track") {
+          totalShutterCount = 3;
+        } else {
+          // 2-track (default)
+          totalShutterCount = 2;
+        }
+        const glassShuttersCount = totalShutterCount - 1; // 1 slot is the mosquito shutter
 
-        glass.glassSize.totalArea = areaPerShutter * glassShuttersCount * qty;
-        sectionGlassArea += glass.glassSize.totalArea;
-        sectionMosquitoArea += areaPerShutter * 1 * qty;
+        // Compute areas locally — do NOT mutate glass.glassSize.totalArea because
+        // that object lives inside sectionResults and downstream consumers rely on
+        // its original value (all shutters × quantity).
+        const glassTotalArea = areaPerShutter * glassShuttersCount * qty;
+        const mosquitoTotalArea = areaPerShutter * qty; // always 1 mosquito shutter
+        sectionGlassArea += glassTotalArea;
+        sectionMosquitoArea += mosquitoTotalArea;
       } else {
-        // All glass
+        // All-glass or non-mosquito: use the pre-computed totalArea as-is
         sectionGlassArea += glass.glassSize.totalArea;
       }
     });

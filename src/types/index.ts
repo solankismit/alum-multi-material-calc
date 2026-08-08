@@ -126,6 +126,12 @@ export interface SectionResult {
     interlockStockSummary: {
       [key: string]: number;
     };
+    trackRailStockSummary: {
+      [key: string]: number;
+    };
+    mullionStockSummary: {
+      [key: string]: number;
+    };
     frameWastagePiecesSummary: {
       [key: string]: number;
     };
@@ -133,6 +139,12 @@ export interface SectionResult {
       [key: string]: number;
     };
     interlockWastagePiecesSummary: {
+      [key: string]: number;
+    };
+    trackRailWastagePiecesSummary: {
+      [key: string]: number;
+    };
+    mullionWastagePiecesSummary: {
       [key: string]: number;
     };
   };
@@ -163,6 +175,12 @@ export interface CalculationResult {
     interlockStockSummary: {
       [key: string]: number;
     };
+    trackRailStockSummary: {
+      [key: string]: number;
+    };
+    mullionStockSummary: {
+      [key: string]: number;
+    };
     frameWastagePiecesSummary: {
       [key: string]: number;
     };
@@ -170,6 +188,12 @@ export interface CalculationResult {
       [key: string]: number;
     };
     interlockWastagePiecesSummary: {
+      [key: string]: number;
+    };
+    trackRailWastagePiecesSummary: {
+      [key: string]: number;
+    };
+    mullionWastagePiecesSummary: {
       [key: string]: number;
     };
   };

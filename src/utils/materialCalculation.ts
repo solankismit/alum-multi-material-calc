@@ -87,15 +87,6 @@ function calculateShutterPieces(
       count: 2 * actualNumberOfShutters * quantity,
     });
 
-    // If separateMosquitoNet is true and config is glass-mosquito:
-    // Glass usually gets 4H, 4W (per window) for a 3-track or 2-track with mosquito?
-    // Wait, the PR says: "generate separate Glass (4H/4W) and Mosquito (2H/2W) pieces if checked"
-    // Let's pass `separateMosquitoNet` into `createShutterMaterial` instead of splitting it here in piece calculation,
-    // because `calculateShutterPieces` just calculates base width/height.
-    // Actually, `calculateShutterPieces` returns the *total* pieces as if they are same material.
-    // If separate, we need to return `glassHeightPieces`, `glassWidthPieces`, `mosquitoHeightPieces`, `mosquitoWidthPieces`.
-    // Let's modify `calculateShutterPieces` later, or just do it in `createShutterMaterial`.
-    // Let's just pass `sectionConfigData` into the create functions from `calculateSectionMaterials`.
     widthPieces.push({
       length: finalDimensions.shutterWidth,
       count: 2 * actualNumberOfShutters * quantity,
@@ -219,9 +210,8 @@ function createShutterMaterial(
   const separateMosquito = sectionConfigData.separateMosquitoNet && configuration === "glass-mosquito";
 
   if (separateMosquito) {
-    // 2 shutters mosquito (2H, 2W per window)
-    // N shutters glass (e.g. 2 for 2-track, 4 for 3-track? wait, 3-track has 2 glass 1 mosquito usually)
-    // PR states: Glass (4H/4W) and Mosquito (2H/2W)
+    // Mosquito configuration: 1 mosquito shutter (2H + 2W pieces per window),
+    // remainder are glass shutters ((numberOfShutters - 1) × 2H + 2W pieces per window).
     const glassHeightPieces: PieceCount[] = [];
     const glassWidthPieces: PieceCount[] = [];
     const mosquitoHeightPieces: PieceCount[] = [];
@@ -232,11 +222,11 @@ function createShutterMaterial(
       const finalDims = sectionConfig.calculateFinalDimensions(dim.width, dim.height, dim.sections || undefined);
       const actualNumberOfShutters = dim.sections || sectionConfig.numberOfShutters;
 
-      // Mosquito
+      // 1 mosquito shutter per window (2 height + 2 width pieces)
       mosquitoHeightPieces.push({ length: finalDims.height, count: 2 * dim.quantity });
       mosquitoWidthPieces.push({ length: finalDims.shutterWidth, count: 2 * dim.quantity });
 
-      // Glass (assuming the rest of the shutters are glass)
+      // Remaining shutters are glass
       const glassShuttersCount = actualNumberOfShutters - 1;
       glassHeightPieces.push({ length: finalDims.height, count: 2 * glassShuttersCount * dim.quantity });
       glassWidthPieces.push({ length: finalDims.shutterWidth, count: 2 * glassShuttersCount * dim.quantity });

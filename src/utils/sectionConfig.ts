@@ -59,8 +59,12 @@ export function getSectionConfig(
   const trackType = dbConfig.trackType;
   const configuration = dbConfig.configuration;
   const isOpenable = dbConfig.systemType === "openable" || trackType === "openable";
+  // For sliding windows: 2-track → 2 shutters, 3-track → 3 shutters.
+  // For openable windows: the actual panel count comes from dim.sections and
+  // overrides this fallback in all piece/area calculations.
   const numberOfShutters = trackType === "3-track" ? 3 : 2;
-  const numberOfGlassShutters = configuration === "all-glass" ? numberOfShutters : numberOfShutters - 1;
+  const numberOfGlassShutters =
+    configuration === "all-glass" ? numberOfShutters : numberOfShutters - 1;
   /**
    * Single source of truth for calculating final dimensions
    * This function calculates both shutter width and height with corrections applied
@@ -102,11 +106,17 @@ export function getSectionConfig(
     hasTrackRail: dbConfig.hasTrackRail ?? true,
     calculateFinalDimensions,
     calculateInterlockLength: (height: number) => {
-      // PR states "Length = shutter height." The final shutter height IS finalDimensions.height
-      return calculateFinalDimensions(0, height).height;
+      // Interlock length = final shutter height (after the height deduction is applied).
+      // We derive this directly from the deduction values rather than calling
+      // calculateFinalDimensions with a dummy width=0, which produced a negative
+      // shutterWidth side-effect for openable windows and was fragile.
+      if (isOpenable) {
+        return height - (dbConfig.outerFrameHeightDeduction || 0);
+      }
+      return height - dbConfig.heightDeduction;
     },
     calculateInterlockCount: (quantity: number) => {
-      // PR states "Base interlock count on number of shutters per section height" Check if interlocks = shutters? Yes
+      // One interlock per glass shutter per window
       return numberOfGlassShutters * quantity;
     },
     calculateTrackRailPieces: (sectionWidth: number, quantity: number) => {
