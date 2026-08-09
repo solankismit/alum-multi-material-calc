@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import RateCardForm from "./RateCardForm";
+import { PageContainer } from "@/components/layout/PageContainer";
 
 export default async function RateCardPage() {
     const session = await verifySession();
@@ -27,20 +28,18 @@ export default async function RateCardPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 p-8">
-            <div className="max-w-3xl mx-auto space-y-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900">Rate Card</h1>
-                        <p className="text-sm text-slate-500">Set your pricing once — every new quotation pulls from here by default.</p>
-                    </div>
-                    <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
-                        <ArrowLeft className="w-4 h-4" /> Back to Dashboard
-                    </Link>
+        <PageContainer size="medium" contentClassName="space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-text">Rate Card</h1>
+                    <p className="text-sm text-text-muted">Set your pricing once — every new quotation pulls from here by default.</p>
                 </div>
-
-                <RateCardForm initial={initial} />
+                <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text">
+                    <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+                </Link>
             </div>
-        </div>
+
+            <RateCardForm initial={initial} />
+        </PageContainer>
     );
 }

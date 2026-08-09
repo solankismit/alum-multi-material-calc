@@ -14,6 +14,14 @@ import {
 } from "@/components/ui/Dialog";
 import { Label } from "@/components/ui/Label";
 import { Input } from "@/components/ui/Input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/Tabs";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/Select";
 import { StockOption, MaterialStockMap } from "@/types";
 
 interface StockSettingsProps {
@@ -157,34 +165,37 @@ export default function StockSettings({
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2 border-slate-300 text-slate-700 hover:bg-slate-50">
+                <Button variant="outline" size="sm" className="gap-2 border-border-strong text-text hover:bg-surface-muted">
                     <Settings className="w-4 h-4" />
                     Stock Settings
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden flex flex-col">
                 <DialogHeader className="pb-4 border-b">
-                    <DialogTitle className="text-xl text-slate-800">Per-Material Stock Settings</DialogTitle>
-                    <DialogDescription className="text-slate-500">
+                    <DialogTitle className="text-xl text-text">Per-Material Stock Settings</DialogTitle>
+                    <DialogDescription className="text-text-muted">
                         Assign specific stock lengths to different material components for precise optimization.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="flex-1 overflow-y-auto py-4 -mx-6 px-6">
                     {/* Global Stocks Manager */}
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
-                        <Label className="text-sm font-semibold text-slate-800 mb-2 block">Available Global Stocks</Label>
+                    <div className="bg-surface-muted p-4 rounded-xl border border-border mb-6">
+                        <Label className="text-sm font-semibold text-text mb-2 block">Available Global Stocks</Label>
                         <div className="flex flex-wrap gap-2 mb-4">
                             {availableOptions.map(opt => (
-                                <div key={opt.length} className="flex items-center gap-2 bg-white border border-slate-200 pl-3 pr-2 py-1.5 rounded-full text-sm shadow-sm text-slate-700">
+                                <div key={opt.length} className="flex items-center gap-2 bg-surface border border-border pl-3 pr-2 py-1.5 rounded-full text-sm shadow-sm text-text">
                                     <span className="font-medium">{opt.name}</span>
-                                    <button
+                                    <Button
                                         type="button"
-                                        className="text-slate-400 hover:text-red-500"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-5 w-5 text-text-muted hover:text-danger hover:bg-danger-surface"
                                         onClick={() => handleRemoveGlobalStock(opt.length)}
+                                        aria-label={`Remove ${opt.name} stock`}
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                    </Button>
                                 </div>
                             ))}
                         </div>
@@ -197,51 +208,47 @@ export default function StockSettings({
                                 onChange={(e) => setNewStockInput(e.target.value)}
                                 className="h-9"
                             />
-                            <select
-                                value={newStockUnit}
-                                onChange={(e) => setNewStockUnit(e.target.value as any)}
-                                className="h-9 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700"
-                            >
-                                <option value="ft">ft</option>
-                                <option value="mm">mm</option>
-                            </select>
+                            <Select value={newStockUnit} onValueChange={(val) => setNewStockUnit(val as "ft" | "mm")}>
+                                <SelectTrigger className="h-9 w-20">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ft">ft</SelectItem>
+                                    <SelectItem value="mm">mm</SelectItem>
+                                </SelectContent>
+                            </Select>
                             <Button size="sm" onClick={handleAddStock} className="h-9 shrink-0" variant="secondary">
                                 <Plus className="w-4 h-4 mr-1" /> Add
                             </Button>
                         </div>
                     </div>
 
-                    <div className="flex gap-2 border-b border-slate-200 mb-6 overflow-x-auto pb-2">
-                        {materialCategories.map(cat => (
-                            <button
-                                key={cat.id}
-                                onClick={() => setActiveTab(cat.id)}
-                                className={`px-4 py-2 text-sm font-medium whitespace-nowrap rounded-md transition-colors ${activeTab === cat.id
-                                    ? "bg-slate-900 text-white"
-                                    : "text-slate-600 hover:bg-slate-100"
-                                    }`}
-                            >
-                                {cat.label}
-                            </button>
-                        ))}
-                    </div>
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6 overflow-x-auto pb-2">
+                        <TabsList>
+                            {materialCategories.map(cat => (
+                                <TabsTrigger key={cat.id} value={cat.id} className="whitespace-nowrap">
+                                    {cat.label}
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                    </Tabs>
 
                     <div className="space-y-4">
                         <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-medium text-slate-800">
+                            <h4 className="font-medium text-text">
                                 {materialCategories.find(c => c.id === activeTab)?.label}
                             </h4>
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-xs h-7 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+                                className="text-xs h-7 text-primary hover:text-primary hover:bg-primary/10"
                                 onClick={() => handleSelectAll(activeTab)}
                             >
                                 Select All
                             </Button>
                         </div>
 
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-lg border border-slate-100">
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 bg-surface-muted p-4 rounded-lg border border-border">
                             {availableOptions.map((option) => {
                                 const currentCategoryOptions = selectedOptions[activeTab] || [];
                                 const isSelected = !!currentCategoryOptions.find(
@@ -250,7 +257,7 @@ export default function StockSettings({
                                 return (
                                     <div
                                         key={option.length}
-                                        className="flex items-center space-x-3 bg-white p-3 rounded-md shadow-sm border border-slate-200"
+                                        className="flex items-center space-x-3 bg-surface p-3 rounded-md shadow-sm border border-border"
                                     >
                                         <Checkbox
                                             id={`stock-${activeTab}-${option.length}`}
@@ -261,7 +268,7 @@ export default function StockSettings({
                                         />
                                         <Label
                                             htmlFor={`stock-${activeTab}-${option.length}`}
-                                            className="text-sm cursor-pointer flex-1 font-medium text-slate-700"
+                                            className="text-sm cursor-pointer flex-1 font-medium text-text"
                                         >
                                             {option.name || `${option.lengthFeet.toFixed(2)}ft (${Math.round(option.length)}mm)`}
                                         </Label>

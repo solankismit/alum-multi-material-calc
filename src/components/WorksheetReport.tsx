@@ -2,12 +2,11 @@
 
 import { useMemo } from "react";
 import { Printer, ArrowLeft, Download, Receipt, Scissors, List } from "lucide-react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CalculationResult, WindowInput } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { aggregatePlans, getPieceDescription } from "@/utils/cuttingPlanHelpers";
+import { aggregatePlans, getPieceDescription, getPieceColorClass } from "@/utils/cuttingPlanHelpers";
 import { resolveMaterialCategory, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
 import PrintStyles from "@/components/PrintStyles";
 import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
@@ -39,8 +38,6 @@ export default function WorksheetReport({
     result,
     sectionName,
 }: WorksheetReportProps) {
-    const router = useRouter();
-
     const handlePrint = () => {
         window.print();
     };
@@ -49,7 +46,9 @@ export default function WorksheetReport({
         return (
             <div className="p-8 text-center">
                 <h2 className="text-xl font-semibold text-red-600">No calculation result found.</h2>
-                <Button onClick={() => router.back()} className="mt-4">Go Back</Button>
+                <Link href="/dashboard">
+                    <Button className="mt-4">Back to Dashboard</Button>
+                </Link>
             </div>
         );
     }
@@ -69,10 +68,12 @@ export default function WorksheetReport({
 
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
-                    <Button variant="ghost" onClick={() => router.back()} className="pl-0 hover:bg-transparent hover:text-slate-900">
-                        <ArrowLeft className="w-5 h-5 mr-2" />
-                        Back to Dashboard
-                    </Button>
+                    <Link href="/dashboard">
+                        <Button variant="ghost" className="pl-0 hover:bg-transparent hover:text-slate-900">
+                            <ArrowLeft className="w-5 h-5 mr-2" />
+                            Back to Dashboard
+                        </Button>
+                    </Link>
                     <div className="flex items-center gap-2">
                         <Link href={`/worksheets/${worksheetId}/windows-list`}>
                             <Button variant="outline" className="border-slate-300 shadow-sm">
@@ -255,12 +256,7 @@ export default function WorksheetReport({
                                                                                 {plan.pieces.map((len, pieceIdx) => {
                                                                                     const percent = (len / plan.stockLength) * 100;
                                                                                     const type = plan.pieceTypes?.[pieceIdx] || "";
-                                                                                    // Color code based on type
-                                                                                    let colorClass = "bg-indigo-200 text-indigo-900 border-indigo-300"; // default height
-                                                                                    if (type.includes("width")) colorClass = "bg-emerald-200 text-emerald-900 border-emerald-300";
-                                                                                    if (type.includes("interlock")) colorClass = "bg-amber-200 text-amber-900 border-amber-300";
-                                                                                    if (type.includes("m-height") || type.includes("m-width")) colorClass = "bg-rose-200 text-rose-900 border-rose-300";
-                                                                                    if (type.includes("track")) colorClass = "bg-cyan-200 text-cyan-900 border-cyan-300";
+                                                                                    const colorClass = getPieceColorClass(type);
 
                                                                                     return (
                                                                                         <div

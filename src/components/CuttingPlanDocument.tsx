@@ -1,10 +1,10 @@
 "use client";
 
 import { Printer, ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { CalculationResult } from "@/types";
 import { Button } from "@/components/ui/Button";
-import { aggregatePlans, getPieceDescription } from "@/utils/cuttingPlanHelpers";
+import { aggregatePlans, getPieceDescription, getPieceColorClass } from "@/utils/cuttingPlanHelpers";
 import { resolveMaterialCategory, MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
 import PrintStyles from "@/components/PrintStyles";
 
@@ -16,19 +16,20 @@ interface CuttingPlanDocumentProps {
 }
 
 export default function CuttingPlanDocument({
+    worksheetId,
     worksheetName,
     createdAt,
     result,
 }: CuttingPlanDocumentProps) {
-    const router = useRouter();
-
     const handlePrint = () => window.print();
 
     if (!result) {
         return (
             <div className="p-8 text-center">
                 <h2 className="text-xl font-semibold text-red-600">No calculation result found.</h2>
-                <Button onClick={() => router.back()} className="mt-4">Go Back</Button>
+                <Link href={`/worksheets/${worksheetId}`}>
+                    <Button className="mt-4">Back to Worksheet</Button>
+                </Link>
             </div>
         );
     }
@@ -44,10 +45,12 @@ export default function CuttingPlanDocument({
 
                 {/* Header Actions */}
                 <div className="flex items-center justify-between print:hidden">
-                    <Button variant="ghost" onClick={() => router.back()} className="pl-0 hover:bg-transparent hover:text-slate-900">
-                        <ArrowLeft className="w-5 h-5 mr-2" />
-                        Back
-                    </Button>
+                    <Link href={`/worksheets/${worksheetId}`}>
+                        <Button variant="ghost" className="pl-0 hover:bg-transparent hover:text-slate-900">
+                            <ArrowLeft className="w-5 h-5 mr-2" />
+                            Back to Worksheet
+                        </Button>
+                    </Link>
                     <Button onClick={handlePrint} variant="outline" className="border-slate-300 shadow-sm">
                         <Printer className="w-4 h-4 mr-2" />
                         Print / Save PDF
@@ -113,12 +116,7 @@ export default function CuttingPlanDocument({
                                                                                 {plan.pieces.map((len, pieceIdx) => {
                                                                                     const percent = (len / plan.stockLength) * 100;
                                                                                     const type = plan.pieceTypes?.[pieceIdx] || "";
-                                                                                    let colorClass = "bg-indigo-200 text-indigo-900 border-indigo-300";
-                                                                                    if (type.includes("width")) colorClass = "bg-emerald-200 text-emerald-900 border-emerald-300";
-                                                                                    if (type.includes("interlock")) colorClass = "bg-amber-200 text-amber-900 border-amber-300";
-                                                                                    if (type.includes("m-height") || type.includes("m-width")) colorClass = "bg-rose-200 text-rose-900 border-rose-300";
-                                                                                    if (type.includes("track")) colorClass = "bg-cyan-200 text-cyan-900 border-cyan-300";
-                                                                                    if (type.includes("mullion")) colorClass = "bg-purple-200 text-purple-900 border-purple-300";
+                                                                                    const colorClass = getPieceColorClass(type);
 
                                                                                     return (
                                                                                         <div

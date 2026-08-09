@@ -31,3 +31,12 @@ export const uiStyles = {
 } as const
 
 export type BadgeVariant = Exclude<keyof typeof uiStyles.badge, "base">
+
+/** Shared status→badge-variant mapping so Quotation status colors aren't
+ * defined independently in multiple places (quotations list + detail). */
+export const QUOTATION_STATUS_VARIANT: Record<string, BadgeVariant> = {
+    DRAFT: "neutral",
+    SENT: "primary",
+    ACCEPTED: "success",
+    REJECTED: "danger",
+}

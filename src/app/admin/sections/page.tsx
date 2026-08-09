@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/Card";
 import { Plus, Pencil, Box, Settings, Ruler } from "lucide-react";
 import DeleteSectionButton from "./_components/DeleteSectionButton";
+import { PageContainer } from "@/components/layout/PageContainer";
 
 export default async function AdminSectionsPage() {
     const session = await verifySession();
@@ -23,8 +24,7 @@ export default async function AdminSectionsPage() {
     });
 
     return (
-        <div className="min-h-screen bg-slate-50 p-4 md:p-8">
-            <div className="max-w-7xl mx-auto space-y-8">
+        <PageContainer contentClassName="space-y-8">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-slate-900">Manage Sections</h1>
@@ -107,7 +107,6 @@ export default async function AdminSectionsPage() {
                         </div>
                     </Link>
                 </div>
-            </div>
-        </div>
+        </PageContainer>
     );
 }

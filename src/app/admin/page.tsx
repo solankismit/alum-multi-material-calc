@@ -2,6 +2,9 @@ import { verifySession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/Table";
+import { Badge } from "@/components/ui/Badge";
+import { PageContainer } from "@/components/layout/PageContainer";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 
@@ -19,10 +22,10 @@ export default async function AdminDashboardPage() {
 
     if (currentUser?.role !== "ADMIN") {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-100">
+            <div className="min-h-screen flex items-center justify-center bg-surface-muted">
                 <Card className="max-w-md w-full">
                     <CardHeader>
-                        <CardTitle className="text-red-600">Access Denied</CardTitle>
+                        <CardTitle className="text-danger">Access Denied</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="mb-4">You do not have permission to view this page.</p>
@@ -48,10 +51,9 @@ export default async function AdminDashboardPage() {
     });
 
     return (
-        <div className="min-h-screen bg-gray-100 p-8">
-            <div className="max-w-7xl mx-auto space-y-8">
+        <PageContainer contentClassName="space-y-8">
                 <div className="flex items-center justify-between">
-                    <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+                    <h1 className="text-3xl font-bold text-text">Admin Dashboard</h1>
                     <Link href="/dashboard">
                         <Button variant="outline">Back to User Dashboard</Button>
                     </Link>
@@ -104,49 +106,43 @@ export default async function AdminDashboardPage() {
                 </div>
 
                 {/* Recent Users Table */}
-                <Card className="border-slate-200 shadow-sm">
+                <Card className="border-border shadow-sm">
                     <CardHeader>
-                        <CardTitle className="text-lg font-bold text-slate-800">Recent Users</CardTitle>
+                        <CardTitle className="text-lg font-bold text-text">Recent Users</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
-                                    <tr>
-                                        <th className="px-6 py-3 font-medium">Name</th>
-                                        <th className="px-6 py-3 font-medium">Email</th>
-                                        <th className="px-6 py-3 font-medium">Role</th>
-                                        <th className="px-6 py-3 font-medium">Company</th>
-                                        <th className="px-6 py-3 font-medium">Joined</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {users.map(user => (
-                                        <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-6 py-4 font-medium text-slate-900">{user.name}</td>
-                                            <td className="px-6 py-4 text-slate-600">{user.email}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'ADMIN' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'
-                                                    }`}>
-                                                    {user.role}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-slate-600">{user.company || "-"}</td>
-                                            <td className="px-6 py-4 text-slate-500">
-                                                {new Date(user.createdAt).toLocaleDateString("en-IN", {
-                                                    day: "numeric",
-                                                    month: "short",
-                                                    year: "numeric"
-                                                })}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Email</TableHead>
+                                    <TableHead>Role</TableHead>
+                                    <TableHead>Company</TableHead>
+                                    <TableHead>Joined</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {users.map(user => (
+                                    <TableRow key={user.id}>
+                                        <TableCell className="font-medium">{user.name}</TableCell>
+                                        <TableCell>{user.email}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={user.role === "ADMIN" ? "primary" : "success"}>{user.role}</Badge>
+                                        </TableCell>
+                                        <TableCell>{user.company || "-"}</TableCell>
+                                        <TableCell className="text-text-muted">
+                                            {new Date(user.createdAt).toLocaleDateString("en-IN", {
+                                                day: "numeric",
+                                                month: "short",
+                                                year: "numeric"
+                                            })}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     </CardContent>
                 </Card>
-            </div>
-        </div>
+        </PageContainer>
     );
 }

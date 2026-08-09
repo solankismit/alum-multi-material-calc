@@ -19,14 +19,14 @@ export default function MaterialCard({
   const isExpanded = expandedSections[sectionKey] ?? false;
 
   return (
-    <div className="border border-slate-200 rounded-lg p-3 hover:shadow-md transition-shadow">
+    <div className="border border-border rounded-lg p-3 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-2">
         <div className="flex-1">
-          <h4 className="font-semibold text-slate-800 text-sm">
+          <h4 className="font-semibold text-text text-sm">
             {material.component}
           </h4>
           {material.description && (
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-text-muted mt-0.5">
               {material.description}
             </p>
           )}
@@ -42,19 +42,19 @@ export default function MaterialCard({
 
       <div className="grid grid-cols-2 gap-3 mb-2 text-xs">
         <div>
-          <p className="text-slate-500 mb-0.5">Required</p>
-          <p className="font-semibold text-slate-800">
+          <p className="text-text-muted mb-0.5">Required</p>
+          <p className="font-semibold text-text">
             {mmToFeet(material.totalRequired)} ft
           </p>
-          <p className="text-[10px] text-slate-500">
+          <p className="text-[10px] text-text-muted">
             {formatMm(material.totalRequired)} mm
           </p>
         </div>
         <div>
-          <p className="text-slate-500 mb-0.5">Stock</p>
+          <p className="text-text-muted mb-0.5">Stock</p>
           {material.stockBreakdown.allStockCounts ? (
             <div>
-              <p className="font-semibold text-slate-800 mb-1">
+              <p className="font-semibold text-text mb-1">
                 {material.stockBreakdown.stocksNeeded} stocks
               </p>
               <div className="flex flex-wrap gap-1">
@@ -63,7 +63,7 @@ export default function MaterialCard({
                   .map(([stockName, count]) => (
                     <span
                       key={stockName}
-                      className="text-[10px] bg-slate-100 text-slate-700 px-1 py-0.5 rounded"
+                      className="text-[10px] bg-slate-100 text-text px-1 py-0.5 rounded"
                     >
                       {count}× {stockName}
                     </span>
@@ -71,7 +71,7 @@ export default function MaterialCard({
               </div>
             </div>
           ) : (
-            <p className="font-semibold text-slate-800">
+            <p className="font-semibold text-text">
               {material.stockBreakdown.stocksNeeded}×{" "}
               {material.stockBreakdown.stockName}
             </p>
@@ -96,13 +96,13 @@ export default function MaterialCard({
         </div>
       )}
 
-      <div className="flex justify-between items-center bg-slate-50 rounded px-2 py-1 mb-2 text-xs">
-        <span className="text-slate-600">Wastage:</span>
+      <div className="flex justify-between items-center bg-surface-muted rounded px-2 py-1 mb-2 text-xs">
+        <span className="text-text-muted">Wastage:</span>
         <div className="text-right">
-          <span className="font-medium text-slate-800">
+          <span className="font-medium text-text">
             {mmToFeet(material.stockBreakdown.totalWastage)} ft
           </span>
-          <p className="text-[10px] text-slate-500">
+          <p className="text-[10px] text-text-muted">
             {formatMm(material.stockBreakdown.totalWastage)} mm
           </p>
         </div>
@@ -110,10 +110,10 @@ export default function MaterialCard({
 
       {material.stockBreakdown.cuttingPlans &&
         material.stockBreakdown.cuttingPlans.length > 0 && (
-          <div className="border-t border-slate-200 pt-2 mt-2">
+          <div className="border-t border-border pt-2 mt-2">
             <button
               onClick={() => onToggleSection(sectionKey)}
-              className="flex items-center justify-between w-full text-xs font-semibold text-slate-700 mb-2 hover:text-slate-900"
+              className="flex items-center justify-between w-full text-xs font-semibold text-text mb-2 hover:text-text"
             >
               <span>
                 Cutting Plan ({material.stockBreakdown.stocksNeeded} stocks)
@@ -132,7 +132,7 @@ export default function MaterialCard({
                     className="bg-blue-50 rounded p-1.5 text-xs"
                   >
                     <div className="flex justify-between items-center mb-0.5">
-                      <span className="font-medium text-slate-700">
+                      <span className="font-medium text-text">
                         #{plan.stockIndex} (
                         {plan.stockName || material.stockBreakdown.stockName})
                       </span>
@@ -142,7 +142,7 @@ export default function MaterialCard({
                         </span>
                       )}
                     </div>
-                    <div className="text-slate-600 text-xs">
+                    <div className="text-text-muted text-xs">
                       {plan.pieces
                         .map((p, idx) => {
                           const pieceType = plan.pieceTypes?.[idx] || "";

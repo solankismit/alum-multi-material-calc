@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calculator, LayoutDashboard, Settings, LogOut, Menu, X, User } from "lucide-react";
+import { Calculator, LayoutDashboard, Settings, LogOut, Menu, X, User, Receipt, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 
 interface NavbarProps {
     user?: {
@@ -14,86 +15,77 @@ interface NavbarProps {
     } | null;
 }
 
+interface NavItem {
+    href: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+}
+
 export default function Navbar({ user }: NavbarProps) {
     const pathname = usePathname();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-    const isActive = (path: string) => pathname === path;
+    // Root ("/") only matches exactly, otherwise every path would highlight
+    // it. Every other nav item matches its own path and any nested route
+    // beneath it (e.g. /quotations/123 highlights "Quotations").
+    const isActive = (path: string) =>
+        path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(`${path}/`);
 
     const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
 
+    // Dashboard doubles as the worksheets list (WorksheetList renders there),
+    // so there is no separate "Worksheets" destination to link to.
+    const navItems: NavItem[] = [
+        { href: "/", label: "Calculator", icon: Calculator },
+        ...(user ? [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
+        ...(user ? [{ href: "/quotations", label: "Quotations", icon: Receipt }] : []),
+        ...(user?.role === "ADMIN" ? [{ href: "/admin", label: "Admin", icon: ShieldCheck }] : []),
+    ];
+
     return (
-        <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 print:hidden">
+        <nav className="bg-surface border-b border-border sticky top-0 z-50 print:hidden">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between h-16">
                     <div className="flex">
                         <div className="flex-shrink-0 flex items-center">
                             <Link href="/" className="flex items-center gap-2">
-                                <div className="bg-slate-900 text-white p-1.5 rounded-lg">
+                                <div className="bg-primary text-primary-foreground p-1.5 rounded-lg">
                                     <Calculator className="h-5 w-5" />
                                 </div>
-                                <span className="font-bold text-xl text-slate-900 hidden sm:block">AlumCalc</span>
+                                <span className="font-bold text-xl text-text hidden sm:block">AlumCalc</span>
                             </Link>
                         </div>
                         <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                            <Link
-                                href="/"
-                                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${isActive("/")
-                                    ? "border-slate-900 text-slate-900"
-                                    : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                                    }`}
-                            >
-                                Calculator
-                            </Link>
-                            {user && (
+                            {navItems.map((item) => (
                                 <Link
-                                    href="/dashboard"
-                                    className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${isActive("/dashboard")
-                                        ? "border-slate-900 text-slate-900"
-                                        : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                                        }`}
+                                    key={item.href}
+                                    href={item.href}
+                                    className={cn(
+                                        "inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium",
+                                        isActive(item.href)
+                                            ? "border-primary text-primary"
+                                            : "border-transparent text-text-muted hover:border-border-strong hover:text-text"
+                                    )}
                                 >
-                                    Dashboard
+                                    {item.label}
                                 </Link>
-                            )}
-                            {user && (
-                                <Link
-                                    href="/quotations"
-                                    className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${isActive("/quotations")
-                                        ? "border-slate-900 text-slate-900"
-                                        : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                                        }`}
-                                >
-                                    Quotations
-                                </Link>
-                            )}
-                            {user?.role === "ADMIN" && (
-                                <Link
-                                    href="/admin"
-                                    className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${isActive("/admin")
-                                        ? "border-slate-900 text-slate-900"
-                                        : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                                        }`}
-                                >
-                                    Admin
-                                </Link>
-                            )}
+                            ))}
                         </div>
                     </div>
                     <div className="hidden sm:ml-6 sm:flex sm:items-center gap-4">
                         {user ? (
                             <div className="flex items-center gap-4">
                                 <Link href="/dashboard/settings">
-                                    <Button variant="ghost" size="sm" className={isActive("/dashboard/settings") ? "bg-slate-100" : ""}>
+                                    <Button variant="ghost" size="sm" className={isActive("/dashboard/settings") ? "bg-surface-muted" : ""}>
                                         <Settings className="h-4 w-4 mr-2" />
                                         Settings
                                     </Button>
                                 </Link>
-                                <div className="h-6 w-px bg-gray-200"></div>
+                                <div className="h-6 w-px bg-border"></div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm text-gray-700 font-medium">{user.name || user.email}</span>
+                                    <span className="text-sm text-text font-medium">{user.name || user.email}</span>
                                     <form action="/api/auth/logout" method="POST">
-                                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                                        <Button variant="ghost" size="sm" className="text-danger hover:text-danger hover:bg-danger-surface">
                                             <LogOut className="h-4 w-4" />
                                         </Button>
                                     </form>
@@ -113,7 +105,7 @@ export default function Navbar({ user }: NavbarProps) {
                     <div className="-mr-2 flex items-center sm:hidden">
                         <button
                             onClick={toggleMenu}
-                            className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-500"
+                            className="inline-flex items-center justify-center p-2 rounded-md text-text-muted hover:text-text hover:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                         >
                             <span className="sr-only">Open main menu</span>
                             {isMenuOpen ? (
@@ -130,79 +122,49 @@ export default function Navbar({ user }: NavbarProps) {
             {isMenuOpen && (
                 <div className="sm:hidden">
                     <div className="pt-2 pb-3 space-y-1">
-                        <Link
-                            href="/"
-                            onClick={() => setIsMenuOpen(false)}
-                            className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${isActive("/")
-                                ? "bg-slate-50 border-slate-500 text-slate-700"
-                                : "border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
-                                }`}
-                        >
-                            Calculator
-                        </Link>
-                        {user && (
+                        {navItems.map((item) => (
                             <Link
-                                href="/dashboard"
+                                key={item.href}
+                                href={item.href}
                                 onClick={() => setIsMenuOpen(false)}
-                                className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${isActive("/dashboard")
-                                    ? "bg-slate-50 border-slate-500 text-slate-700"
-                                    : "border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
-                                    }`}
+                                className={cn(
+                                    "flex items-center gap-2 pl-3 pr-4 py-2 border-l-4 text-base font-medium",
+                                    isActive(item.href)
+                                        ? "bg-primary/5 border-primary text-primary"
+                                        : "border-transparent text-text-muted hover:bg-surface-muted hover:border-border-strong hover:text-text"
+                                )}
                             >
-                                Dashboard
+                                <item.icon className="h-4 w-4" />
+                                {item.label}
                             </Link>
-                        )}
-                        {user && (
-                            <Link
-                                href="/quotations"
-                                onClick={() => setIsMenuOpen(false)}
-                                className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${isActive("/quotations")
-                                    ? "bg-slate-50 border-slate-500 text-slate-700"
-                                    : "border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
-                                    }`}
-                            >
-                                Quotations
-                            </Link>
-                        )}
-                        {user?.role === "ADMIN" && (
-                            <Link
-                                href="/admin"
-                                onClick={() => setIsMenuOpen(false)}
-                                className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${isActive("/admin")
-                                    ? "bg-slate-50 border-slate-500 text-slate-700"
-                                    : "border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
-                                    }`}
-                            >
-                                Admin
-                            </Link>
-                        )}
+                        ))}
                     </div>
-                    <div className="pt-4 pb-4 border-t border-gray-200">
+                    <div className="pt-4 pb-4 border-t border-border">
                         {user ? (
                             <div className="space-y-1">
                                 <div className="px-4 flex items-center">
                                     <div className="flex-shrink-0">
-                                        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600">
+                                        <div className="h-8 w-8 rounded-full bg-surface-muted flex items-center justify-center text-text-muted">
                                             <User className="h-5 w-5" />
                                         </div>
                                     </div>
                                     <div className="ml-3">
-                                        <div className="text-base font-medium text-gray-800">{user.name || "User"}</div>
-                                        <div className="text-sm font-medium text-gray-500">{user.email}</div>
+                                        <div className="text-base font-medium text-text">{user.name || "User"}</div>
+                                        <div className="text-sm font-medium text-text-muted">{user.email}</div>
                                     </div>
                                 </div>
                                 <div className="mt-3 space-y-1">
                                     <Link
                                         href="/dashboard/settings"
                                         onClick={() => setIsMenuOpen(false)}
-                                        className="block px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                                        className="block px-4 py-2 text-base font-medium text-text-muted hover:text-text hover:bg-surface-muted"
                                     >
                                         Settings
                                     </Link>
                                     <form action="/api/auth/logout" method="POST">
                                         <button
                                             type="submit"
-                                            className="block w-full text-left px-4 py-2 text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                                            className="block w-full text-left px-4 py-2 text-base font-medium text-text-muted hover:text-text hover:bg-surface-muted"
                                         >
                                             Sign out
                                         </button>
@@ -214,14 +176,14 @@ export default function Navbar({ user }: NavbarProps) {
                                 <Link
                                     href="/login"
                                     onClick={() => setIsMenuOpen(false)}
-                                    className="block text-center w-full px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-slate-600 bg-white hover:bg-gray-50 border-gray-300 mb-2"
+                                    className="block text-center w-full px-4 py-2 border border-border rounded-md shadow-sm text-base font-medium text-text bg-surface hover:bg-surface-muted mb-2"
                                 >
                                     Log in
                                 </Link>
                                 <Link
                                     href="/register"
                                     onClick={() => setIsMenuOpen(false)}
-                                    className="block text-center w-full px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-slate-900 hover:bg-slate-800"
+                                    className="block text-center w-full px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-primary-foreground bg-primary hover:bg-primary-hover"
                                 >
                                     Sign up
                                 </Link>

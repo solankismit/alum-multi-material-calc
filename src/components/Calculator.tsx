@@ -1,23 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Calculator as CalculatorIcon, Save, Download } from "lucide-react";
-import { SectionConfiguration } from "@prisma/client";
-import { CalculationResult, WindowInput, StockOption, MaterialStockMap } from "@/types";
+import { Save, Calculator as CalculatorIcon } from "lucide-react";
+import { CalculationResult, SectionWithConfigs, WindowInput } from "@/types";
 import { calculateMaterials } from "@/utils/calculations";
 import WindowForm from "@/lib/components/WindowForm";
 import ResultsDisplay from "@/lib/components/ResultsDisplay";
+import { PageContainer } from "@/components/layout/PageContainer";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Label } from "@/components/ui/Label";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/Select";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useToast } from "@/components/ui/Toast";
 import { useRouter } from "next/navigation";
 
 interface CalculatorProps {
@@ -26,13 +20,15 @@ interface CalculatorProps {
 
 export default function Calculator({ initialInput }: CalculatorProps) {
     const router = useRouter();
+    const { toast } = useToast();
     const [windowInput, setWindowInput] = useState<WindowInput | null>(
         initialInput || null
     );
     const [result, setResult] = useState<CalculationResult | null>(null);
 
     // Section Data State
-    const [allSections, setAllSections] = useState<any[]>([]);
+    const [allSections, setAllSections] = useState<SectionWithConfigs[]>([]);
+    const [sectionsLoading, setSectionsLoading] = useState(true);
 
 
     // Saving state
@@ -47,7 +43,8 @@ export default function Calculator({ initialInput }: CalculatorProps) {
             .then((data) => {
                 setAllSections(data);
             })
-            .catch((err) => console.error("Failed to fetch section configs", err));
+            .catch((err) => console.error("Failed to fetch section configs", err))
+            .finally(() => setSectionsLoading(false));
     }, []);
 
 
@@ -90,7 +87,7 @@ export default function Calculator({ initialInput }: CalculatorProps) {
 
     const performSave = async () => {
         if (!worksheetName.trim()) {
-            alert("Please enter a name");
+            toast("Please enter a name", "error");
             return;
         }
 
@@ -109,9 +106,8 @@ export default function Calculator({ initialInput }: CalculatorProps) {
             });
 
             if (res.status === 401) {
-                if (confirm("You need to be logged in to save. Go to login?")) {
-                    router.push("/login");
-                }
+                toast("You need to be logged in to save.", "error");
+                router.push("/login");
                 return;
             }
 
@@ -119,43 +115,53 @@ export default function Calculator({ initialInput }: CalculatorProps) {
                 throw new Error("Failed to save");
             }
 
-            alert("Worksheet saved successfully!");
+            toast("Worksheet saved successfully!");
             setShowSaveDialog(false);
             router.push("/dashboard");
         } catch (error) {
             console.error("Save error", error);
-            alert("Failed to save worksheet.");
+            toast("Failed to save worksheet.", "error");
         } finally {
             setIsSaving(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100">
-            <div className="container mx-auto px-4 py-8 max-w-7xl">
-                <header className="mb-6 border-b border-slate-200 pb-4">
-                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                        Material Calculator
-                    </h1>
-                    <p className="text-slate-500 text-sm mt-1">
-                        Optimize stock usage and estimate requirements for your project.
-                    </p>
-                </header>
+        <PageContainer size="wide">
+            <header className="mb-6 border-b border-border pb-4">
+                <h1 className="text-2xl font-bold text-text tracking-tight">
+                    Material Calculator
+                </h1>
+                <p className="text-text-muted text-sm mt-1">
+                    Optimize stock usage and estimate requirements for your project.
+                </p>
+            </header>
 
-                <div className="grid lg:grid-cols-2 gap-6">
-                    <div className="lg:col-span-1">
+            <div className="grid lg:grid-cols-2 gap-6">
+                <div className="lg:col-span-1">
+                    {sectionsLoading ? (
+                        <div className="space-y-4 rounded-xl border border-border bg-surface p-6 shadow-sm">
+                            <Skeleton className="h-6 w-48" />
+                            <Skeleton className="h-40 w-full rounded-lg" />
+                            <Skeleton className="h-40 w-full rounded-lg" />
+                        </div>
+                    ) : (
                         <WindowForm
                             onCalculate={handleSubmitInput}
                             onReset={handleReset}
                             initialValues={initialInput}
                             allSections={allSections}
                         />
-                    </div>
+                    )}
+                </div>
 
-                    {result && <div className="lg:col-span-1 lg:sticky lg:top-4 lg:self-start space-y-4">
-                        {/* Action Bar */}
-                        <div className="bg-white p-4 rounded-lg shadow-sm flex flex-wrap items-center justify-between gap-4 transition-all duration-200">
-                            {result && (
+                {/* Right column's grid space is always reserved (not just once a
+                    result exists) so the layout doesn't jump from 1 to 2 columns
+                    on first calculate. */}
+                <div className="lg:col-span-1 lg:sticky lg:top-4 lg:self-start space-y-4">
+                    {result ? (
+                        <>
+                            <div className="bg-surface p-4 rounded-lg shadow-sm flex flex-wrap items-center justify-between gap-4 transition-all duration-200">
                                 <div className="flex items-center justify-end gap-2 flex-1 w-full relative">
                                     {showSaveDialog ? (
                                         <div className="flex items-center gap-2 w-full animate-in fade-in slide-in-from-right-4 duration-300">
@@ -192,17 +198,23 @@ export default function Calculator({ initialInput }: CalculatorProps) {
                                         </Button>
                                     )}
                                 </div>
-                            )}
-                        </div>
+                            </div>
 
-                        {result && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 <ResultsDisplay result={result} />
                             </div>
-                        )}
-                    </div>}
+                        </>
+                    ) : (
+                        <div className="hidden lg:flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-surface/50 p-12 text-center h-full min-h-[300px]">
+                            <CalculatorIcon className="h-8 w-8 text-text-muted" />
+                            <p className="text-sm text-text-muted max-w-xs">
+                                Fill in the window specifications and calculate to see material
+                                requirements here.
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
-        </div>
+        </PageContainer>
     );
 }

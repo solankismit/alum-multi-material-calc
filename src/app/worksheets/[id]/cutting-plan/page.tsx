@@ -1,5 +1,6 @@
 import { getOwnedWorksheet } from "@/lib/data-fetchers";
 import CuttingPlanDocument from "@/components/CuttingPlanDocument";
+import { AccessDenied } from "@/components/layout/AccessDenied";
 
 export default async function CuttingPlanPage({
     params,
@@ -10,7 +11,7 @@ export default async function CuttingPlanPage({
     const { forbidden, worksheet, data } = await getOwnedWorksheet(id);
 
     if (forbidden) {
-        return <div className="p-8 text-center text-red-600">You do not have permission to view this worksheet.</div>;
+        return <AccessDenied message="You do not have permission to view this worksheet." />;
     }
 
     return (

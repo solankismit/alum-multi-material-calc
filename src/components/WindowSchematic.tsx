@@ -81,14 +81,14 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
     const trackHeight = frameH / numTracks;
 
     return (
-        <svg viewBox={`0 0 ${canvasW} ${canvasH}`} className={`w-full h-auto bg-slate-50 border border-slate-200 rounded ${className}`}>
+        <svg viewBox={`0 0 ${canvasW} ${canvasH}`} className={`w-full h-auto bg-surface-muted border border-border rounded ${className}`}>
             {/* Definitions for patterns */}
             <defs>
                 <pattern id="diagonalHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-                    <rect width="4" height="8" transform="translate(0,0)" fill="#e2e8f0" opacity="0.5" />
+                    <rect width="4" height="8" transform="translate(0,0)" fill="var(--color-border)" opacity="0.5" />
                 </pattern>
                 <pattern id="meshPattern" patternUnits="userSpaceOnUse" width="6" height="6">
-                    <path d="M 0 6 L 6 0 M -1 1 L 1 -1 M 5 7 L 7 5" stroke="#64748b" strokeWidth="0.5" />
+                    <path d="M 0 6 L 6 0 M -1 1 L 1 -1 M 5 7 L 7 5" stroke="var(--color-text-muted)" strokeWidth="0.5" />
                 </pattern>
                 <linearGradient id="glassGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#e0f2fe" stopOpacity="0.4" />
@@ -105,7 +105,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                 width={frameW}
                 height={frameH}
                 fill="none"
-                stroke="#334155"
+                stroke="var(--color-text)"
                 strokeWidth="4"
                 rx="2"
             />
@@ -119,7 +119,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                         y1={padding + (i * 4) + 4}
                         x2={width - padding}
                         y2={padding + (i * 4) + 4}
-                        stroke="#94a3b8"
+                        stroke="var(--color-border-strong)"
                         strokeWidth="1"
                     />
                     {/* Bottom Track Line */}
@@ -128,7 +128,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                         y1={height - padding - (i * 4) - 4}
                         x2={width - padding}
                         y2={height - padding - (i * 4) - 4}
-                        stroke="#94a3b8"
+                        stroke="var(--color-border-strong)"
                         strokeWidth="1"
                     />
                 </g>
@@ -151,7 +151,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                             width={panelW + inset * 2}
                             height={panelH + inset * 2}
                             fill="url(#meshPattern)"
-                            stroke="#475569"
+                            stroke="var(--color-text-muted)"
                             strokeWidth="2"
                             strokeDasharray="4 3"
                             rx="1"
@@ -161,7 +161,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                             x={panelX - inset + 8}
                             y={panelY - inset + 14}
                             fontSize="9"
-                            fill="#475569"
+                            fill="var(--color-text-muted)"
                             fontWeight="bold"
                             opacity="0.9"
                         >
@@ -198,7 +198,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                             width={panelW}
                             height={panelH}
                             fill={isMosquito ? "url(#meshPattern)" : "url(#glassGradient)"}
-                            stroke={isMosquito ? "#475569" : "#3b82f6"}
+                            stroke={isMosquito ? "var(--color-text-muted)" : "var(--color-primary)"}
                             strokeWidth="2"
                             rx="1"
                         />
@@ -209,7 +209,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                             width={panelW - 8}
                             height={panelH - 8}
                             fill="none"
-                            stroke={isMosquito ? "#cbd5e1" : "#bfdbfe"}
+                            stroke={isMosquito ? "var(--color-border-strong)" : "var(--color-primary)"}
                             strokeWidth="1"
                             opacity="0.5"
                         />
@@ -217,14 +217,14 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                         {!isOpenableSystem ? (
                             <path
                                 d={`M ${panelX + panelW - 20} ${panelY + panelH / 2} l -6 -4 v 8 z`}
-                                fill={isMosquito ? "#64748b" : "#60a5fa"}
+                                fill={isMosquito ? "var(--color-text-muted)" : "var(--color-primary)"}
                                 opacity="0.6"
                             />
                         ) : (
                             <path 
                                 d={`M ${panelX + 4} ${panelY + 4} L ${panelX + panelW - 4} ${panelY + panelH / 2} L ${panelX + 4} ${panelY + panelH - 4}`}
                                 fill="none"
-                                stroke="#94a3b8" 
+                                stroke="var(--color-border-strong)" 
                                 strokeWidth="1"
                                 strokeDasharray="3 3"
                                 opacity="0.6"
@@ -236,7 +236,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                             y={panelY + panelH - 10}
                             textAnchor="middle"
                             fontSize="10"
-                            fill={isMosquito ? "#475569" : "#3b82f6"}
+                            fill={isMosquito ? "var(--color-text-muted)" : "var(--color-primary)"}
                             fontWeight="bold"
                             opacity="0.8"
                         >
@@ -250,10 +250,10 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
             {/* Width dimension line — reserved top gutter */}
             {widthMm !== undefined && widthMm > 0 && (
                 <g>
-                    <line x1={dimGutter + padding} y1={dimGutter - 8} x2={dimGutter + width - padding} y2={dimGutter - 8} stroke="#334155" strokeWidth="1" />
-                    <line x1={dimGutter + padding} y1={dimGutter - 12} x2={dimGutter + padding} y2={dimGutter - 4} stroke="#334155" strokeWidth="1" />
-                    <line x1={dimGutter + width - padding} y1={dimGutter - 12} x2={dimGutter + width - padding} y2={dimGutter - 4} stroke="#334155" strokeWidth="1" />
-                    <text x={dimGutter + width / 2} y={dimGutter - 16} textAnchor="middle" fontSize="11" fill="#334155" fontWeight="600">
+                    <line x1={dimGutter + padding} y1={dimGutter - 8} x2={dimGutter + width - padding} y2={dimGutter - 8} stroke="var(--color-text)" strokeWidth="1" />
+                    <line x1={dimGutter + padding} y1={dimGutter - 12} x2={dimGutter + padding} y2={dimGutter - 4} stroke="var(--color-text)" strokeWidth="1" />
+                    <line x1={dimGutter + width - padding} y1={dimGutter - 12} x2={dimGutter + width - padding} y2={dimGutter - 4} stroke="var(--color-text)" strokeWidth="1" />
+                    <text x={dimGutter + width / 2} y={dimGutter - 16} textAnchor="middle" fontSize="11" fill="var(--color-text)" fontWeight="600">
                         {Math.round(widthMm)} mm
                     </text>
                 </g>
@@ -262,15 +262,15 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
             {/* Height dimension line — reserved left gutter */}
             {heightMm !== undefined && heightMm > 0 && (
                 <g>
-                    <line x1={dimGutter - 8} y1={dimGutter + padding} x2={dimGutter - 8} y2={dimGutter + height - padding} stroke="#334155" strokeWidth="1" />
-                    <line x1={dimGutter - 12} y1={dimGutter + padding} x2={dimGutter - 4} y2={dimGutter + padding} stroke="#334155" strokeWidth="1" />
-                    <line x1={dimGutter - 12} y1={dimGutter + height - padding} x2={dimGutter - 4} y2={dimGutter + height - padding} stroke="#334155" strokeWidth="1" />
+                    <line x1={dimGutter - 8} y1={dimGutter + padding} x2={dimGutter - 8} y2={dimGutter + height - padding} stroke="var(--color-text)" strokeWidth="1" />
+                    <line x1={dimGutter - 12} y1={dimGutter + padding} x2={dimGutter - 4} y2={dimGutter + padding} stroke="var(--color-text)" strokeWidth="1" />
+                    <line x1={dimGutter - 12} y1={dimGutter + height - padding} x2={dimGutter - 4} y2={dimGutter + height - padding} stroke="var(--color-text)" strokeWidth="1" />
                     <text
                         x={16}
                         y={dimGutter + height / 2}
                         textAnchor="middle"
                         fontSize="11"
-                        fill="#334155"
+                        fill="var(--color-text)"
                         fontWeight="600"
                         transform={`rotate(-90 16 ${dimGutter + height / 2})`}
                     >

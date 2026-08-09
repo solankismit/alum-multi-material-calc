@@ -2,6 +2,7 @@ import { verifySession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import SectionForm from "../_components/SectionForm";
+import { PageContainer } from "@/components/layout/PageContainer";
 
 export default async function NewSectionPage() {
     const session = await verifySession();
@@ -15,11 +16,9 @@ export default async function NewSectionPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-100 p-8">
-            <div className="max-w-4xl mx-auto">
-                <h1 className="text-2xl font-bold text-gray-900 mb-6">Create New Section</h1>
-                <SectionForm />
-            </div>
-        </div>
+        <PageContainer size="medium">
+            <h1 className="text-2xl font-bold text-text mb-6">Create New Section</h1>
+            <SectionForm />
+        </PageContainer>
     );
 }

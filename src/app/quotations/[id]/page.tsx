@@ -1,5 +1,7 @@
 "use server";
 
+import Link from "next/link";
+import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { getQuotation } from "../actions";
 import { formatCurrency, AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 import ClientPrintButton from "@/app/worksheets/orderbook/ClientPrintButton";
@@ -60,8 +62,11 @@ export default async function QuotationView({ params }: PageProps) {
 
     if (!res.success || !res.data) {
         return (
-            <div className="p-8 text-center text-red-500">
-                Error: {res.error || "Quotation not found"}
+            <div className="p-8 text-center">
+                <p className="text-danger mb-4">{res.error || "Quotation not found"}</p>
+                <Link href="/quotations" className="text-primary hover:underline text-sm font-medium">
+                    &larr; Back to Quotations
+                </Link>
             </div>
         );
     }
@@ -131,9 +136,18 @@ export default async function QuotationView({ params }: PageProps) {
     });
 
     return (
-        <div className="min-h-screen bg-slate-100 p-8 print:p-0 print:bg-white">
+        <div className="min-h-screen bg-surface-muted p-8 print:p-0 print:bg-white">
             <PrintStyles />
-            <div className="max-w-4xl mx-auto bg-white shadow-lg print:shadow-none p-8 md:p-12 print:p-0 text-sm print:text-[11px]" id="printable-area">
+            <div className="max-w-4xl mx-auto print:hidden mb-3">
+                <Breadcrumbs
+                    items={[
+                        { label: "Dashboard", href: "/dashboard" },
+                        { label: "Quotations", href: "/quotations" },
+                        { label: quote.quotationNumber || "Quotation" },
+                    ]}
+                />
+            </div>
+            <div className="max-w-4xl mx-auto bg-surface shadow-lg print:shadow-none p-8 md:p-12 print:p-0 text-sm print:text-[11px]" id="printable-area">
 
                 {/* Header Actions (Hidden continuously in print) */}
                 <div className="print:hidden flex justify-between items-center mb-8">

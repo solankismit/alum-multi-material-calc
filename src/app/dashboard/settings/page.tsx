@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/Button";
 import { Receipt } from "lucide-react";
 import { ProfileForm } from "./ProfileForm";
+import { PageContainer } from "@/components/layout/PageContainer";
 
 export default async function SettingsPage() {
     const session = await verifySession();
@@ -17,9 +18,8 @@ export default async function SettingsPage() {
     if (!user) return redirect("/login");
 
     return (
-        <div className="min-h-screen bg-gray-100 p-8">
-            <div className="max-w-2xl mx-auto">
-                <h1 className="text-2xl font-bold mb-6">Settings</h1>
+        <PageContainer size="narrow">
+                <h1 className="text-2xl font-bold mb-6 text-text">Settings</h1>
 
                 <Card>
                     <CardHeader>
@@ -52,7 +52,6 @@ export default async function SettingsPage() {
                         </Link>
                     </CardContent>
                 </Card>
-            </div>
-        </div>
+        </PageContainer>
     );
 }

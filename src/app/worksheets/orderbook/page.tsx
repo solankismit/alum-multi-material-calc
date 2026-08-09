@@ -7,6 +7,7 @@ import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import ClientPrintButton from "./ClientPrintButton";
 import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/Table";
 // import ClientPrintButton from "./ClientPrintButton"; // We'll create this small client component
 
 interface OrderbookParams {
@@ -58,7 +59,7 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
     if (!session?.userId) return redirect("/login");
 
     const { ids } = await searchParams;
-    if (!ids) return <div className="p-8 text-center text-red-500">No worksheets selected.</div>;
+    if (!ids) return <div className="p-8 text-center text-danger">No worksheets selected. Go back and select at least one worksheet.</div>;
 
     const worksheetIds = ids.split(",").filter(Boolean);
 
@@ -69,7 +70,7 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
         },
     });
 
-    if (worksheets.length === 0) return <div className="p-8 text-center">No worksheets found.</div>;
+    if (worksheets.length === 0) return <div className="p-8 text-center text-text-muted">No worksheets found for the given selection.</div>;
 
     // --- Aggregation Logic ---
 
@@ -172,53 +173,51 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
                     <span className={`w-3 h-3 rounded-sm ${colorClass}`}></span>
                     {title}
                 </h3>
-                <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-                    <table className="w-full text-sm">
-                        <thead className="bg-slate-50 text-slate-700 font-semibold text-left border-b">
-                            <tr>
-                                <th className="px-4 py-3">Profile Name</th>
-                                <th className="px-4 py-3 text-center w-32">Length (mm)</th>
-                                <th className="px-4 py-3 text-left w-48">Cut Pieces Needed</th>
-                                <th className="px-4 py-3 text-center w-32">Total Full Qty</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {items.map((item, idx) => {
-                                const pieces = item.pieceBreakdown ? Object.entries(item.pieceBreakdown) : [];
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Profile Name</TableHead>
+                            <TableHead className="text-center w-32">Length (mm)</TableHead>
+                            <TableHead className="text-left w-48">Cut Pieces Needed</TableHead>
+                            <TableHead className="text-center w-32">Total Full Qty</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {items.map((item, idx) => {
+                            const pieces = item.pieceBreakdown ? Object.entries(item.pieceBreakdown) : [];
 
-                                return (
-                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                        <td className="px-4 py-3 font-medium text-slate-900 align-top">{item.stockName}</td>
-                                        <td className="px-4 py-3 text-center text-slate-600 align-top">{item.stockLength}</td>
-                                        <td className="px-4 py-3 text-left text-sm text-slate-600">
-                                            {pieces.length > 0 ? (
-                                                <ul className="space-y-1">
-                                                    {pieces.map(([pType, pQty], i) => (
-                                                        <li key={i} className="flex justify-between border-b border-slate-100 last:border-0 pb-1 last:pb-0">
-                                                            <span className="text-slate-500 capitalize">{formatPieceType(pType)}:</span>
-                                                            <strong className="text-slate-900 ml-2">{pQty}</strong>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <span className="text-slate-400 italic">Standard cuts</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-center font-bold text-indigo-700 text-lg bg-indigo-50/30 align-top">
-                                            {item.totalNeeded}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                            return (
+                                <TableRow key={idx}>
+                                    <TableCell className="font-medium align-top">{item.stockName}</TableCell>
+                                    <TableCell className="text-center align-top">{item.stockLength}</TableCell>
+                                    <TableCell className="text-left">
+                                        {pieces.length > 0 ? (
+                                            <ul className="space-y-1">
+                                                {pieces.map(([pType, pQty], i) => (
+                                                    <li key={i} className="flex justify-between border-b border-border last:border-0 pb-1 last:pb-0">
+                                                        <span className="text-text-muted capitalize">{formatPieceType(pType)}:</span>
+                                                        <strong className="text-text ml-2">{pQty}</strong>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <span className="text-text-muted italic">Standard cuts</span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-center font-bold text-primary text-lg bg-primary/5 align-top">
+                                        {item.totalNeeded}
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
             </section>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans print:bg-white print:p-0">
+        <div className="min-h-screen bg-surface-muted p-4 md:p-8 font-sans print:bg-white print:p-0">
             <div className="max-w-5xl mx-auto space-y-6 md:space-y-8">
                 {/* Header Actions */}
                 <div className="flex justify-between items-center print:hidden">
@@ -330,41 +329,39 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
                                         </div>
 
                                         {glassList.length > 0 ? (
-                                            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-                                                <table className="w-full text-sm">
-                                                    <thead className="bg-slate-50 text-slate-700 font-semibold text-left border-b">
-                                                        <tr>
-                                                            <th className="px-4 py-3">Exact Cut Dimensions (W x H)</th>
-                                                            <th className="px-4 py-3 text-center">Total Cut Pieces required</th>
-                                                            <th className="px-4 py-3 text-right">Total Area (sq.ft)</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-slate-100">
-                                                        {glassList.map((item, idx) => (
-                                                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                                                <td className="px-4 py-3 font-medium text-slate-900 border-r border-slate-50">
-                                                                    {item.width.toFixed(1)} x {item.height.toFixed(1)} mm
-                                                                </td>
-                                                                <td className="px-4 py-3 text-center font-bold text-slate-800 bg-blue-50/30">
-                                                                    {item.totalQuantity} <span className="font-normal text-xs text-slate-500 ml-1">pieces</span>
-                                                                </td>
-                                                                <td className="px-4 py-3 text-right text-slate-600 font-medium">
-                                                                    {(item.totalArea / AREA_SQMM_PER_SQFT).toFixed(2)}
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                        <tr className="bg-slate-800 text-white font-bold">
-                                                            <td className="px-4 py-3 text-right text-slate-300 text-xs uppercase tracking-wider">Total Glass Area</td>
-                                                            <td className="px-4 py-3"></td>
-                                                            <td className="px-4 py-3 text-right text-lg">
-                                                                {(group.totalGlassArea / AREA_SQMM_PER_SQFT).toFixed(2)} sq.ft
-                                                            </td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Exact Cut Dimensions (W x H)</TableHead>
+                                                        <TableHead className="text-center">Total Cut Pieces required</TableHead>
+                                                        <TableHead className="text-right">Total Area (sq.ft)</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {glassList.map((item, idx) => (
+                                                        <TableRow key={idx}>
+                                                            <TableCell className="font-medium">
+                                                                {item.width.toFixed(1)} x {item.height.toFixed(1)} mm
+                                                            </TableCell>
+                                                            <TableCell className="text-center font-bold bg-primary/5">
+                                                                {item.totalQuantity} <span className="font-normal text-xs text-text-muted ml-1">pieces</span>
+                                                            </TableCell>
+                                                            <TableCell className="text-right font-medium">
+                                                                {(item.totalArea / AREA_SQMM_PER_SQFT).toFixed(2)}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                    <TableRow className="bg-surface-inverse text-text-inverse font-bold hover:bg-surface-inverse">
+                                                        <TableCell className="text-right text-text-inverse/70 text-xs uppercase tracking-wider">Total Glass Area</TableCell>
+                                                        <TableCell />
+                                                        <TableCell className="text-right text-lg text-text-inverse">
+                                                            {(group.totalGlassArea / AREA_SQMM_PER_SQFT).toFixed(2)} sq.ft
+                                                        </TableCell>
+                                                    </TableRow>
+                                                </TableBody>
+                                            </Table>
                                         ) : (
-                                            <div className="p-4 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed">No glass required for this section.</div>
+                                            <div className="p-4 text-center text-text-muted bg-surface-muted rounded-xl border border-dashed border-border">No glass required for this section.</div>
                                         )}
                                     </section>
                                 </div>

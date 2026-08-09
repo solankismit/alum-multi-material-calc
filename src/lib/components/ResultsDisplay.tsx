@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { CalculationResult } from "../../types";
 import { mmToFeet, formatMm } from "@/utils/formatters";
+import { uiStyles } from "@/lib/utils";
 import SummaryCard from "./SummaryCard";
 import StockSummaryCard from "./StockSummaryCard";
 import MaterialCard from "./MaterialCard";
@@ -45,8 +46,8 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
   return (
     <div className="space-y-4 md:max-h-[calc(100vh-8rem)] overflow-y-auto pr-2 custom-scrollbar-thin">
       {/* ── Combined Summary ─────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl shadow-lg p-4">
-        <h2 className="text-xl font-semibold text-slate-800 mb-4">
+      <div className="bg-surface rounded-xl shadow-lg p-4">
+        <h2 className="text-xl font-semibold text-text mb-4">
           Overall Summary
         </h2>
 
@@ -186,7 +187,7 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
         return (
           <div
             key={sectionResult.sectionId}
-            className="bg-white rounded-xl shadow-lg p-4"
+            className="bg-surface rounded-xl shadow-lg p-4"
           >
             <button
               type="button"
@@ -198,20 +199,20 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
                   <Scissors className="w-5 h-5 text-indigo-700" />
                 </div>
                 <div className="text-left">
-                  <h3 className="text-xl font-bold text-slate-900 border-b-2 border-indigo-200 pb-1 inline-block">
+                  <h3 className="text-xl font-bold text-text border-b-2 border-primary/20 pb-1 inline-block">
                     {sectionResult.sectionName}
                   </h3>
                   {sectionResult.sectionTypeName && (
-                    <p className="text-xs text-slate-500 mt-1 uppercase tracking-wide font-semibold">
+                    <p className="text-xs text-text-muted mt-1 uppercase tracking-wide font-semibold">
                       System: {sectionResult.sectionTypeName}
                     </p>
                   )}
                 </div>
               </div>
               {isExpanded ? (
-                <ChevronUp className="w-5 h-5 text-slate-600" />
+                <ChevronUp className="w-5 h-5 text-text-muted" />
               ) : (
-                <ChevronDown className="w-5 h-5 text-slate-600" />
+                <ChevronDown className="w-5 h-5 text-text-muted" />
               )}
             </button>
 
@@ -351,7 +352,7 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
                           <div key={idx} className="bg-white p-3">
                             {/* Dimension header */}
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-semibold text-slate-700">
+                              <span className="text-xs font-semibold text-text">
                                 Dimension {idx + 1}
                                 {dimension &&
                                   ` — ${formatMm(dimension.width!)} × ${formatMm(
@@ -368,26 +369,26 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
                             {/* Shutter outer dimensions */}
                             <div className="grid grid-cols-2 gap-2 text-xs mb-2">
                               <div>
-                                <span className="text-slate-500">
+                                <span className="text-text-muted">
                                   Shutter Width:
                                 </span>
-                                <div className="font-semibold text-slate-900">
+                                <div className="font-semibold text-text">
                                   {formatMm(glass.glassSize.finalShutterWidth)}{" "}
                                   mm
                                 </div>
-                                <div className="text-[10px] text-slate-400">
+                                <div className="text-[10px] text-text-muted">
                                   {mmToFeet(glass.glassSize.finalShutterWidth)}{" "}
                                   ft
                                 </div>
                               </div>
                               <div>
-                                <span className="text-slate-500">
+                                <span className="text-text-muted">
                                   Shutter Height:
                                 </span>
-                                <div className="font-semibold text-slate-900">
+                                <div className="font-semibold text-text">
                                   {formatMm(glass.glassSize.finalHeight)} mm
                                 </div>
-                                <div className="text-[10px] text-slate-400">
+                                <div className="text-[10px] text-text-muted">
                                   {mmToFeet(glass.glassSize.finalHeight)} ft
                                 </div>
                               </div>
@@ -405,24 +406,24 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
                               </div>
                               <div className="grid grid-cols-2 gap-2 text-xs">
                                 <div>
-                                  <span className="text-slate-500">Size:</span>
-                                  <div className="font-semibold text-slate-900">
+                                  <span className="text-text-muted">Size:</span>
+                                  <div className="font-semibold text-text">
                                     {formatMm(glass.glassSize.width)} ×{" "}
                                     {formatMm(glass.glassSize.height)} mm
                                   </div>
-                                  <div className="text-[10px] text-slate-400">
+                                  <div className="text-[10px] text-text-muted">
                                     {mmToFeet(glass.glassSize.width)} ×{" "}
                                     {mmToFeet(glass.glassSize.height)} ft
                                   </div>
                                 </div>
                                 <div>
-                                  <span className="text-slate-500">
+                                  <span className="text-text-muted">
                                     Total Area:
                                   </span>
-                                  <div className="font-semibold text-slate-900">
+                                  <div className="font-semibold text-text">
                                     {formatMm(glassTotalArea)} mm²
                                   </div>
-                                  <div className="text-[10px] text-slate-400">
+                                  <div className="text-[10px] text-text-muted">
                                     {(
                                       (glassTotalArea / 1000000) *
                                       10.764
@@ -431,7 +432,7 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
                                   </div>
                                 </div>
                               </div>
-                              <div className="mt-1 text-[10px] text-slate-400">
+                              <div className="mt-1 text-[10px] text-text-muted">
                                 Per pane: {formatMm(glassAreaPerPane)} mm² ×{" "}
                                 {glassShutterCount} ×{" "}
                                 {glass.quantity} qty
@@ -449,26 +450,26 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 text-xs">
                                   <div>
-                                    <span className="text-slate-500">
+                                    <span className="text-text-muted">
                                       Mesh Size:
                                     </span>
-                                    <div className="font-semibold text-slate-900">
+                                    <div className="font-semibold text-text">
                                       {formatMm(glass.glassSize.width)} ×{" "}
                                       {formatMm(glass.glassSize.height)} mm
                                     </div>
-                                    <div className="text-[10px] text-slate-400">
+                                    <div className="text-[10px] text-text-muted">
                                       {mmToFeet(glass.glassSize.width)} ×{" "}
                                       {mmToFeet(glass.glassSize.height)} ft
                                     </div>
                                   </div>
                                   <div>
-                                    <span className="text-slate-500">
+                                    <span className="text-text-muted">
                                       Total Area:
                                     </span>
                                     <div className="font-semibold text-teal-900">
                                       {formatMm(mosquitoTotalArea)} mm²
                                     </div>
-                                    <div className="text-[10px] text-slate-400">
+                                    <div className="text-[10px] text-text-muted">
                                       {(
                                         (mosquitoTotalArea / 1000000) *
                                         10.764
@@ -477,7 +478,7 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
                                     </div>
                                   </div>
                                 </div>
-                                <div className="mt-1 text-[10px] text-slate-400">
+                                <div className="mt-1 text-[10px] text-text-muted">
                                   Per mesh: {formatMm(mosquitoAreaPerMesh)}{" "}
                                   mm² × 1 × {glass.quantity} qty
                                 </div>
@@ -495,7 +496,7 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
                       }`}
                     >
                       <div>
-                        <span className="text-slate-500">Section Glass Area:</span>
+                        <span className="text-text-muted">Section Glass Area:</span>
                         <div className="font-bold text-cyan-900">
                           {formatMm(sectionResult.summary.totalGlassArea ?? 0)}{" "}
                           mm²
@@ -512,7 +513,7 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
                       </div>
                       {hasMosquitoNet && (
                         <div>
-                          <span className="text-slate-500">
+                          <span className="text-text-muted">
                             Section Mosquito Area:
                           </span>
                           <div className="font-bold text-teal-900">
@@ -535,23 +536,23 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
                 {/* ── Accessories ───────────────────────────────────────── */}
                 {(sectionResult.accessories.mosquitoCChannel > 0 ||
                   sectionResult.accessories.trackCap > 0) && (
-                  <div className="bg-slate-50 rounded-lg p-3 mb-4">
-                    <h4 className="text-xs font-semibold text-slate-800 mb-2">
+                  <div className="bg-surface-muted rounded-lg p-3 mb-4">
+                    <h4 className="text-xs font-semibold text-text mb-2">
                       Accessories
                     </h4>
                     <div className="grid grid-cols-2 gap-2">
                       {sectionResult.accessories.mosquitoCChannel > 0 && (
-                        <div className="flex justify-between items-center p-2 bg-white rounded text-xs">
-                          <span className="text-slate-700">C-Channel:</span>
-                          <span className="font-bold text-slate-900">
+                        <div className="flex justify-between items-center p-2 bg-surface rounded text-xs">
+                          <span className="text-text">C-Channel:</span>
+                          <span className="font-bold text-text">
                             {sectionResult.accessories.mosquitoCChannel}
                           </span>
                         </div>
                       )}
                       {sectionResult.accessories.trackCap > 0 && (
-                        <div className="flex justify-between items-center p-2 bg-white rounded text-xs">
-                          <span className="text-slate-700">Track Cap:</span>
-                          <span className="font-bold text-slate-900">
+                        <div className="flex justify-between items-center p-2 bg-surface rounded text-xs">
+                          <span className="text-text">Track Cap:</span>
+                          <span className="font-bold text-text">
                             {sectionResult.accessories.trackCap}
                           </span>
                         </div>
@@ -566,7 +567,7 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
       })}
 
       {/* ── Combined Order Summary ────────────────────────────────────────── */}
-      <div className="bg-linear-to-r from-slate-700 to-slate-800 rounded-xl shadow-lg p-4 text-white">
+      <div className={uiStyles.darkPanel}>
         <h3 className="text-sm font-semibold mb-3">Order Summary</h3>
         <div className="space-y-1.5 text-xs">
           <div className="flex justify-between">

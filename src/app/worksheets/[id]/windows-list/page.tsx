@@ -1,5 +1,6 @@
 import { getOwnedWorksheet } from "@/lib/data-fetchers";
 import WindowsListDocument from "@/components/WindowsListDocument";
+import { AccessDenied } from "@/components/layout/AccessDenied";
 
 export default async function WindowsListPage({
     params,
@@ -10,11 +11,12 @@ export default async function WindowsListPage({
     const { forbidden, worksheet, data } = await getOwnedWorksheet(id);
 
     if (forbidden) {
-        return <div className="p-8 text-center text-red-600">You do not have permission to view this worksheet.</div>;
+        return <AccessDenied message="You do not have permission to view this worksheet." />;
     }
 
     return (
         <WindowsListDocument
+            worksheetId={worksheet.id}
             worksheetName={worksheet.name}
             createdAt={worksheet.createdAt}
             input={data.input}

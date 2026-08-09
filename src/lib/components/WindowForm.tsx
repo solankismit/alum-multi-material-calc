@@ -12,6 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { useToast } from "@/components/ui/Toast";
 import WindowSchematic from "@/components/WindowSchematic";
 import StockSettings from "@/components/StockSettings";
 import {
@@ -32,6 +34,7 @@ interface WindowFormProps {
 const KERF_STORAGE_KEY = "alum_kerf_width_mm";
 
 export default function WindowForm({ onCalculate, onReset, initialValues, allSections }: WindowFormProps) {
+  const { toast } = useToast();
   const [unitMode, setUnitMode] = useState<"mm" | "ft">("mm");
 
   const [kerfWidthMm, setKerfWidthMm] = useState<number>(
@@ -279,7 +282,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) {
-      alert("Please fix the dimension validation errors in red.");
+      toast("Please fix the dimension validation errors in red.", "error");
       return;
     }
 
@@ -298,18 +301,18 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
       .filter((section) => section.dimensions.length > 0);
 
     if (filteredSections.length === 0) {
-      alert("Please add at least one valid dimension before calculating.");
+      toast("Please add at least one valid dimension before calculating.", "error");
       return;
     }
 
     // Check if every section has a sectionTypeId and a stockMap has at least one stock selected
     for (const section of filteredSections) {
       if (!section.sectionTypeId) {
-        alert(`Please select a System Profile for ${section.name}.`);
+        toast(`Please select a System Profile for ${section.name}.`, "error");
         return;
       }
       if (!section.stockMap || Object.keys(section.stockMap).length === 0) {
-        alert(`Please configure Stock Settings for ${section.name}.`);
+        toast(`Please configure Stock Settings for ${section.name}.`, "error");
         return;
       }
     }
@@ -340,16 +343,16 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
   };
 
   return (
-    <Card className="border-0 shadow-lg sm:border sm:border-slate-200">
-      <CardHeader className="pb-4 border-b border-slate-100 mb-6 bg-slate-50/50">
+    <Card className="border-0 shadow-lg sm:border sm:border-border">
+      <CardHeader className="pb-4 border-b border-border mb-6 bg-surface-muted/50">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <CardTitle className="text-2xl font-semibold text-slate-800">
+          <CardTitle className="text-2xl font-semibold text-text">
             Window Specifications
           </CardTitle>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
-              <Label className="text-xs font-semibold uppercase text-slate-500 px-1 mb-0">Kerf (mm):</Label>
+            <div className="flex items-center gap-2 bg-surface p-1.5 rounded-lg border border-border shadow-sm">
+              <Label className="text-xs font-semibold uppercase text-text-muted px-1 mb-0">Kerf (mm):</Label>
               <Input
                 type="number"
                 step="0.5"
@@ -361,15 +364,15 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
               />
             </div>
 
-            <div className="flex items-center gap-3 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
-              <span className="text-xs font-semibold uppercase text-slate-500 px-2">Unit:</span>
+            <div className="flex items-center gap-3 bg-surface p-1.5 rounded-lg border border-border shadow-sm">
+              <span className="text-xs font-semibold uppercase text-text-muted px-2">Unit:</span>
               <div className="flex gap-1">
                 <Button
                   type="button"
                   size="sm"
                   variant={unitMode === "mm" ? "primary" : "ghost"}
                   onClick={() => handleUnitToggle("mm")}
-                  className={`h-8 px-4 ${unitMode === "mm" ? "bg-slate-800" : "text-slate-600 hover:text-slate-900"}`}
+                  className="h-8 px-4"
                 >
                   mm
                 </Button>
@@ -378,7 +381,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                   size="sm"
                   variant={unitMode === "ft" ? "primary" : "ghost"}
                   onClick={() => handleUnitToggle("ft")}
-                  className={`h-8 px-4 ${unitMode === "ft" ? "bg-slate-800" : "text-slate-600 hover:text-slate-900"}`}
+                  className="h-8 px-4"
                 >
                   ft
                 </Button>
@@ -393,21 +396,21 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
           {sections.map((section, index) => {
             const selectedSystem = allSections?.find((s) => s.id === section.sectionTypeId);
             const availableConfigs = selectedSystem?.configurations || [];
-            const has2Track = availableConfigs.some((c: any) => c.trackType === "2-track");
-            const has3Track = availableConfigs.some((c: any) => c.trackType === "3-track");
+            const has2Track = availableConfigs.some((c) => c.trackType === "2-track");
+            const has3Track = availableConfigs.some((c) => c.trackType === "3-track");
             const isSystemOpenable = selectedSystem?.systemType === "openable";
             // Panel count is shared by every dimension row in the section —
             // read from the first row as the section's single source of truth.
             const sectionPanelCount = section.dimensions[0]?.sections ?? null;
 
-            const isAllGlassValid = availableConfigs.some((c: any) => c.trackType === section.trackType && c.configuration === "all-glass") || isSystemOpenable;
-            const isGlassMosquitoValid = availableConfigs.some((c: any) => c.trackType === section.trackType && c.configuration === "glass-mosquito") || isSystemOpenable;
+            const isAllGlassValid = availableConfigs.some((c) => c.trackType === section.trackType && c.configuration === "all-glass") || isSystemOpenable;
+            const isGlassMosquitoValid = availableConfigs.some((c) => c.trackType === section.trackType && c.configuration === "glass-mosquito") || isSystemOpenable;
 
 
             return (
               <div
                 key={section.id}
-                className="relative p-3 sm:p-6 bg-white border border-slate-200 rounded-xl shadow-sm transition-all hover:shadow-md hover:border-slate-300 group"
+                className="relative p-3 sm:p-6 bg-surface border border-border rounded-xl shadow-sm transition-all hover:shadow-md hover:border-border-strong group"
               >
                 <div className="absolute top-0 left-0 w-1 h-full bg-slate-200 rounded-l-xl group-hover:bg-slate-400 transition-colors" />
 
@@ -420,21 +423,21 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                         updateSection(section.id, { name: e.target.value })
                       }
                       id="sectionName"
-                      labelClassName="text-slate-600 font-medium text-xs mb-1 block leading-none"
+                      labelClassName="text-text-muted font-medium text-xs mb-1 block leading-none"
                       placeholder="e.g. Living Room Window"
-                      className=" font-medium border-0 border-b rounded-none border-slate-200  px-0 focus:ring-0 focus:border-slate-800 transition-colors bg-transparent placeholder:text-slate-400"
+                      className=" font-medium border-0 border-b rounded-none border-border  px-0 focus:ring-0 focus:border-text transition-colors bg-transparent placeholder:text-text-muted"
                     />
                   </div>
 
                   <div className="w-full sm:w-auto flex items-end gap-2">
                     <div className="flex-1 sm:w-64">
-                      <Label className="text-slate-600 font-medium text-xs mb-1 block">System Profile</Label>
+                      <Label className="text-text-muted font-medium text-xs mb-1 block">System Profile</Label>
                       <Select
                         value={section.sectionTypeId || ""}
                         onValueChange={(val) => updateSection(section.id, { sectionTypeId: val })}
                         disabled={!allSections || allSections.length === 0}
                       >
-                        <SelectTrigger className="border-slate-200 bg-slate-50">
+                        <SelectTrigger className="border-border bg-surface-muted">
                           <SelectValue placeholder="Select system..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -461,10 +464,10 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4 sm:mb-6 pl-4 gap-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-surface-muted border border-border rounded-lg p-3 mb-4 sm:mb-6 pl-4 gap-3">
                   <div>
-                    <h4 className="font-medium text-slate-800 text-sm">Stock Configuration</h4>
-                    <p className="text-xs text-slate-500">Assign specific stock sizes for this section.</p>
+                    <h4 className="font-medium text-text text-sm">Stock Configuration</h4>
+                    <p className="text-xs text-text-muted">Assign specific stock sizes for this section.</p>
                   </div>
                   <StockSettings
                     selectedOptions={section.stockMap || {}}
@@ -476,7 +479,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                   <div className="space-y-6">
                     {!isSystemOpenable && (
                       <div className="space-y-3">
-                        <Label className="text-slate-600 font-medium">Track Type</Label>
+                        <Label className="text-text-muted font-medium">Track Type</Label>
                         <div className="grid grid-cols-2 gap-3">
                           <Button
                             type="button"
@@ -514,7 +517,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                     )}
 
                     <div className="space-y-3">
-                      <Label className="text-slate-600 font-medium">Configuration</Label>
+                      <Label className="text-text-muted font-medium">Configuration</Label>
                       <div className="flex flex-col gap-2">
                         <Button
                           type="button"
@@ -528,7 +531,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                             }`}
                           disabled={!isAllGlassValid}
                         >
-                          <div className={`w-2.5 h-2.5 rounded-full mr-3 ${section.configuration === "all-glass" ? "bg-indigo-600" : "bg-transparent"}`} />
+                          <div className={`w-2.5 h-2.5 rounded-full mr-3 ${section.configuration === "all-glass" ? "bg-primary" : "bg-transparent"}`} />
                           All Glass
                         </Button>
                         <Button
@@ -545,10 +548,10 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                             : uiStyles.selectableButton.inactive
                             }`}
                         >
-                          <div className={`w-2.5 h-2.5 rounded-full mr-3 ${section.configuration === "glass-mosquito" ? "bg-indigo-600" : "bg-transparent"}`} />
+                          <div className={`w-2.5 h-2.5 rounded-full mr-3 ${section.configuration === "glass-mosquito" ? "bg-primary" : "bg-transparent"}`} />
                           Glass + Mosquito
                           {!isGlassMosquitoValid && (
-                            <span className="ml-auto text-xs text-slate-400 font-normal">
+                            <span className="ml-auto text-xs text-text-muted font-normal">
                               (Not available)
                             </span>
                           )}
@@ -558,12 +561,12 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
 
                     {section.configuration === "glass-mosquito" && (
                       <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                        <Label className="text-slate-600 font-medium">Mosquito Mesh Grade</Label>
+                        <Label className="text-text-muted font-medium">Mosquito Mesh Grade</Label>
                         <Select
                           value={section.mosquitoMeshGrade || "304 SS"}
                           onValueChange={(val) => updateSection(section.id, { mosquitoMeshGrade: val })}
                         >
-                          <SelectTrigger className="border-slate-200">
+                          <SelectTrigger className="border-border">
                             <SelectValue placeholder="Select Grade" />
                           </SelectTrigger>
                           <SelectContent>
@@ -578,12 +581,10 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
 
                     {!isSystemOpenable && (
                       <div className="flex items-center gap-2 pt-2 animate-in fade-in slide-in-from-top-2">
-                        <label className="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer">
-                          <input
-                            type="checkbox"
+                        <label className="flex items-center gap-2 text-sm font-medium text-text-muted cursor-pointer">
+                          <Checkbox
                             checked={section.hasTrackRail ?? true}
-                            onChange={(e) => updateSection(section.id, { hasTrackRail: e.target.checked })}
-                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            onCheckedChange={(checked) => updateSection(section.id, { hasTrackRail: checked === true })}
                           />
                           Include Track Rail
                         </label>
@@ -592,8 +593,8 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
 
                     {isSystemOpenable && (
                       <div className="space-y-2">
-                        <Label className="text-slate-600 font-medium">Number of Panels</Label>
-                        <p className="text-xs text-slate-400 -mt-1">Applies to every dimension row in this section.</p>
+                        <Label className="text-text-muted font-medium">Number of Panels</Label>
+                        <p className="text-xs text-text-muted -mt-1">Applies to every dimension row in this section.</p>
                         <Input
                           type="number"
                           min="1"
@@ -615,8 +616,8 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                   </div>
 
                   <div className="flex flex-col space-y-3">
-                    <Label className="text-slate-600 font-medium">Visualization</Label>
-                    <div className="flex-1 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-center p-4">
+                    <Label className="text-text-muted font-medium">Visualization</Label>
+                    <div className="flex-1 bg-surface-muted rounded-lg border border-border flex items-center justify-center p-4">
                       <WindowSchematic
                         trackType={isSystemOpenable ? "openable" : section.trackType}
                         configuration={section.configuration}
@@ -628,16 +629,23 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                 </div>
 
                 <div className="space-y-3 pl-2">
-                  <Label className="text-slate-600 font-medium">Dimensions</Label>
+                  <Label className="text-text-muted font-medium">Dimensions</Label>
+                  {/* Persistent column headers — every row needs a visible label,
+                      not just the first (that was a real bug: rows 2+ had no
+                      indication of which field or unit they were). */}
+                  <div className="grid grid-cols-12 gap-2 sm:gap-3 text-xs font-medium text-text-muted px-0.5">
+                    <div className="col-span-4">Height ({unitMode})</div>
+                    <div className="col-span-4">Width ({unitMode})</div>
+                    <div className="col-span-4">Qty</div>
+                  </div>
                   <div className="space-y-3">
-                    {section.dimensions.map((dimension, idx) => (
+                    {section.dimensions.map((dimension) => (
                       <div
                         key={dimension.id}
                         className="grid grid-cols-12 gap-2 sm:gap-3 items-start animate-in fade-in slide-in-from-top-1 duration-200"
                       >
                         <div className="col-span-4">
                           <Input
-                            label={idx === 0 ? `Height (${unitMode})` : undefined}
                             type="number"
                             step={unitMode === "ft" ? "0.01" : "0.1"}
                             placeholder="Height"
@@ -734,7 +742,6 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
 
                         <div className="col-span-4">
                           <Input
-                            label={idx === 0 ? `Width (${unitMode})` : undefined}
                             type="number"
                             step={unitMode === "ft" ? "0.01" : "0.1"}
                             placeholder="Width"
@@ -828,7 +835,6 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                         <div className="col-span-4 flex items-end gap-1">
                           <div className="flex-1">
                             <Input
-                              label={idx === 0 ? "Qty" : undefined}
                               type="number"
                               min="1"
                               max="100"
@@ -847,14 +853,17 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                             />
                           </div>
                           {section.dimensions.length > 1 && (
-                            <button
+                            <Button
                               type="button"
+                              variant="ghost"
+                              size="icon"
                               onClick={() => removeDimension(section.id, dimension.id)}
-                              className={`p-2 shrink-0 text-slate-400 hover:text-red-600 transition-colors ${idx === 0 ? "mb-1" : ""}`}
+                              className="shrink-0 text-text-muted hover:text-danger hover:bg-danger-surface"
+                              aria-label="Remove dimension"
                               title="Remove Dimension"
                             >
                               <X className="w-5 h-5" />
-                            </button>
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -869,17 +878,17 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
             type="button"
             variant="outline"
             onClick={addSection}
-            className="w-full border-dashed border-2 py-6 text-slate-500 hover:text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+            className="w-full border-dashed border-2 py-6 text-text-muted hover:text-text hover:border-border-strong hover:bg-surface-muted"
           >
             <Plus className="w-5 h-5 mr-2" />
             Add Another Section
           </Button>
 
-          <div className="flex gap-4 pt-4 border-t border-slate-100">
+          <div className="flex gap-4 pt-4 border-t border-border">
             <Button
               type="submit"
               size="lg"
-              className="flex-1 bg-slate-800 hover:bg-slate-900 text-white shadow-md hover:shadow-lg transition-all"
+              className="flex-1 shadow-md hover:shadow-lg transition-all"
             >
               <Calculator className="w-5 h-5 mr-2" />
               Calculate Materials

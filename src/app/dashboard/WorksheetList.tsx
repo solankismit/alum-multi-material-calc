@@ -17,7 +17,10 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/Dialog";
-import { Trash2, FileText, ExternalLink, Plus, Layers, ClipboardList, Receipt } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useToast } from "@/components/ui/Toast";
+import { Trash2, FileText, ExternalLink, Plus, Layers, ClipboardList, Receipt, AlertTriangle } from "lucide-react";
 import { combineWorksheets } from "../worksheets/actions";
 
 
@@ -30,10 +33,13 @@ interface Worksheet {
 
 export default function WorksheetList() {
     const router = useRouter();
+    const { toast } = useToast();
     const [worksheets, setWorksheets] = useState<Worksheet[]>([]);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
     // Combine Dialog State
     const [isCombineOpen, setIsCombineOpen] = useState(false);
@@ -45,21 +51,27 @@ export default function WorksheetList() {
     }, []);
 
     const fetchWorksheets = async () => {
+        setLoading(true);
+        setFetchError(false);
         try {
             const res = await fetch("/api/worksheets");
             if (res.ok) {
                 const data = await res.json();
                 setWorksheets(data);
+            } else {
+                setFetchError(true);
             }
         } catch (error) {
             console.error("Failed to fetch worksheets", error);
+            setFetchError(true);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this worksheet?")) return;
+    const handleDeleteConfirmed = async () => {
+        const id = deleteTargetId;
+        if (!id) return;
 
         setDeletingId(id);
         try {
@@ -70,13 +82,16 @@ export default function WorksheetList() {
             if (res.ok) {
                 setWorksheets((prev) => prev.filter((w) => w.id !== id));
                 setSelectedIds((prev) => prev.filter((i) => i !== id));
+                toast("Worksheet deleted.");
             } else {
-                alert("Failed to delete worksheet");
+                toast("Failed to delete worksheet.", "error");
             }
         } catch (error) {
             console.error("Error deleting worksheet", error);
+            toast("Failed to delete worksheet.", "error");
         } finally {
             setDeletingId(null);
+            setDeleteTargetId(null);
         }
     };
 
@@ -113,20 +128,50 @@ export default function WorksheetList() {
             // Server action call
             const result = await combineWorksheets(selectedIds, newWorksheetName);
             if (result.success && result.id) {
+                toast("Worksheets combined.");
                 router.push(`/worksheets/${result.id}`);
             } else {
-                alert("Failed to combine worksheets: " + (result.error || "Unknown error"));
+                toast("Failed to combine worksheets: " + (result.error || "Unknown error"), "error");
                 setIsCombining(false);
             }
         } catch (error) {
             console.error("Combine error:", error);
-            alert("An error occurred while combining.");
+            toast("An error occurred while combining.", "error");
             setIsCombining(false);
         }
     };
 
     if (loading) {
-        return <div className="p-4 text-center">Loading worksheets...</div>;
+        return (
+            <Card>
+                <CardHeader>
+                    <Skeleton className="h-6 w-40" />
+                    <Skeleton className="h-4 w-64" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-14 w-full" />
+                    ))}
+                </CardContent>
+            </Card>
+        );
+    }
+
+    if (fetchError) {
+        return (
+            <Card>
+                <CardContent className="flex flex-col items-center justify-center py-10 text-center">
+                    <AlertTriangle className="h-12 w-12 text-danger mb-4" />
+                    <h3 className="text-lg font-medium text-text">Couldn&apos;t load your worksheets</h3>
+                    <p className="mt-1 text-sm text-text-muted max-w-sm">
+                        Something went wrong while fetching your worksheets. Please try again.
+                    </p>
+                    <Button className="mt-6" variant="outline" onClick={fetchWorksheets}>
+                        Retry
+                    </Button>
+                </CardContent>
+            </Card>
+        );
     }
 
     if (worksheets.length === 0) {
@@ -225,7 +270,7 @@ export default function WorksheetList() {
                                         variant="ghost"
                                         size="sm"
                                         className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                        onClick={() => handleDelete(worksheet.id)}
+                                        onClick={() => setDeleteTargetId(worksheet.id)}
                                         isLoading={deletingId === worksheet.id}
                                     >
                                         <Trash2 className="h-4 w-4" />
@@ -293,7 +338,7 @@ export default function WorksheetList() {
                                                     <Button
                                                         variant="ghost"
                                                         className="h-10 w-10 !p-3.5 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                                        onClick={() => handleDelete(worksheet.id)}
+                                                        onClick={() => setDeleteTargetId(worksheet.id)}
                                                         isLoading={deletingId === worksheet.id}
                                                     >
                                                         <Trash2 className="h-5 w-5" />
@@ -364,6 +409,17 @@ export default function WorksheetList() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <ConfirmDialog
+                open={deleteTargetId !== null}
+                onOpenChange={(open) => !open && setDeleteTargetId(null)}
+                title="Delete this worksheet?"
+                description="This will permanently delete the worksheet. This action cannot be undone."
+                confirmLabel="Delete"
+                variant="danger"
+                isLoading={deletingId !== null}
+                onConfirm={handleDeleteConfirmed}
+            />
         </Card>
     );
 }

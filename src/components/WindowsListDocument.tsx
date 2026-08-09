@@ -1,7 +1,7 @@
 "use client";
 
 import { Printer, ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { WindowInput } from "@/types";
 import { Button } from "@/components/ui/Button";
 import WindowSchematic from "@/components/WindowSchematic";
@@ -9,20 +9,22 @@ import PrintStyles from "@/components/PrintStyles";
 import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 
 interface WindowsListDocumentProps {
+    worksheetId: string;
     worksheetName: string;
     createdAt: Date;
     input: WindowInput | null;
 }
 
-export default function WindowsListDocument({ worksheetName, createdAt, input }: WindowsListDocumentProps) {
-    const router = useRouter();
+export default function WindowsListDocument({ worksheetId, worksheetName, createdAt, input }: WindowsListDocumentProps) {
     const handlePrint = () => window.print();
 
     if (!input) {
         return (
             <div className="p-8 text-center">
                 <h2 className="text-xl font-semibold text-red-600">No window data found.</h2>
-                <Button onClick={() => router.back()} className="mt-4">Go Back</Button>
+                <Link href={`/worksheets/${worksheetId}`}>
+                    <Button className="mt-4">Back to Worksheet</Button>
+                </Link>
             </div>
         );
     }
@@ -33,16 +35,25 @@ export default function WindowsListDocument({ worksheetName, createdAt, input }:
 
     let totalAreaSqFt = 0;
     let totalQty = 0;
+    input.sections.forEach((section) => {
+        section.dimensions.forEach((dim) => {
+            if (!dim.width || !dim.height || !dim.quantity) return;
+            totalAreaSqFt += (dim.width * dim.height * dim.quantity) / AREA_SQMM_PER_SQFT;
+            totalQty += dim.quantity;
+        });
+    });
 
     return (
         <div className="min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 print:p-0 font-sans">
             <PrintStyles />
             <div className="max-w-5xl mx-auto space-y-6 print:space-y-4">
                 <div className="flex items-center justify-between print:hidden">
-                    <Button variant="ghost" onClick={() => router.back()} className="pl-0 hover:bg-transparent hover:text-slate-900">
-                        <ArrowLeft className="w-5 h-5 mr-2" />
-                        Back
-                    </Button>
+                    <Link href={`/worksheets/${worksheetId}`}>
+                        <Button variant="ghost" className="pl-0 hover:bg-transparent hover:text-slate-900">
+                            <ArrowLeft className="w-5 h-5 mr-2" />
+                            Back to Worksheet
+                        </Button>
+                    </Link>
                     <Button onClick={handlePrint} variant="outline" className="border-slate-300 shadow-sm">
                         <Printer className="w-4 h-4 mr-2" />
                         Print / Save PDF
@@ -65,8 +76,6 @@ export default function WindowsListDocument({ worksheetName, createdAt, input }:
                             return section.dimensions.map((dim, dIdx) => {
                                 if (!dim.width || !dim.height || !dim.quantity) return null;
                                 const areaSqFt = (dim.width * dim.height * dim.quantity) / AREA_SQMM_PER_SQFT;
-                                totalAreaSqFt += areaSqFt;
-                                totalQty += dim.quantity;
 
                                 return (
                                     <div key={`${section.id}-${dIdx}`} className="border border-slate-200 rounded-lg p-4 print:break-inside-avoid">

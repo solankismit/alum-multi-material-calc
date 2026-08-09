@@ -54,7 +54,7 @@ export function ProfileForm({ initialName, initialCompany, initialBusinessAddres
         <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" value={email} disabled className="bg-gray-100" />
+                <Input id="email" value={email} disabled className="bg-surface-muted" />
             </div>
 
             <div className="space-y-2">
@@ -108,7 +108,7 @@ export function ProfileForm({ initialName, initialCompany, initialBusinessAddres
             </div>
 
             {message && (
-                <div className={`text-sm ${message.type === "success" ? "text-green-600" : "text-red-600"}`}>
+                <div className={`text-sm ${message.type === "success" ? "text-success" : "text-danger"}`}>
                     {message.text}
                 </div>
             )}
