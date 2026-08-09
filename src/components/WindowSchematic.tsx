@@ -55,13 +55,19 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                 { type: 'glass', track: 2, offset: 0.64, widthRatio: 0.36 }
             ];
         } else {
+            // A 3-track glass+mosquito window has 3 rails, but only 2 glass
+            // openings are visible from outside, each ~50% width — the mosquito
+            // shutter rides the innermost rail and sits BEHIND one of the glass
+            // shutters when closed. It's drawn as an overlapping layer below,
+            // not a third full-width panel.
             panels = [
-                { type: 'mosquito', track: 0, offset: 0, widthRatio: 0.48 },
                 { type: 'glass', track: 1, offset: 0, widthRatio: 0.52 },
                 { type: 'glass', track: 2, offset: 0.48, widthRatio: 0.52 }
             ];
         }
     }
+
+    const hasMosquitoOverlay = trackType === "3-track" && configuration === "glass-mosquito";
 
     const trackHeight = frameH / numTracks;
 
@@ -117,6 +123,43 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                     />
                 </g>
             ))}
+
+            {/* Mosquito net track — sits behind the first glass panel on a 3-track
+                glass+mosquito window. Drawn slightly larger so a mesh-patterned
+                edge peeks out around the glass panel drawn on top of it. */}
+            {hasMosquitoOverlay && (() => {
+                const panelY = padding + 6;
+                const panelH = frameH - 12;
+                const panelX = padding + (frameW * 0);
+                const panelW = frameW * 0.52;
+                const inset = 6;
+                return (
+                    <g>
+                        <rect
+                            x={panelX - inset}
+                            y={panelY - inset}
+                            width={panelW + inset * 2}
+                            height={panelH + inset * 2}
+                            fill="url(#meshPattern)"
+                            stroke="#475569"
+                            strokeWidth="2"
+                            strokeDasharray="4 3"
+                            rx="1"
+                            opacity="0.9"
+                        />
+                        <text
+                            x={panelX - inset + 8}
+                            y={panelY - inset + 14}
+                            fontSize="9"
+                            fill="#475569"
+                            fontWeight="bold"
+                            opacity="0.9"
+                        >
+                            MESH (behind)
+                        </text>
+                    </g>
+                );
+            })()}
 
             {/* Panels (Shutters) */}
             {panels.map((panel, idx) => {
@@ -180,7 +223,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                         {/* Config Label */}
                         <text
                             x={panelX + (panelW / 2)}
-                            y={(isMosquito ? 1 / 5 : 1) * (panelY + panelH - 10)}
+                            y={panelY + panelH - 10}
                             textAnchor="middle"
                             fontSize="10"
                             fill={isMosquito ? "#475569" : "#3b82f6"}

@@ -2,12 +2,16 @@
 
 import { db } from "@/lib/db";
 import { verifySession } from "@/lib/session";
+import { revalidatePath } from "next/cache";
+import type { QuotationStatus } from "@prisma/client";
 
 export interface QuotationInput {
-    worksheetId: string;
+    worksheetId?: string | null;
     clientName: string;
+    clientPhone?: string;
+    clientAddress?: string;
     quotationNumber: string;
-    pricingData: any; // JSON structure for rates
+    pricingData: unknown; // JSON structure for rates
     totalAmount: number;
 }
 
@@ -17,29 +21,32 @@ export async function createQuotation(input: QuotationInput) {
         if (!session?.userId) {
             return { success: false, error: "Unauthorized" };
         }
+        const userId = session.userId as string;
 
-        // Verify worksheet ownership
-        const worksheet = await db.worksheet.findFirst({
-            where: {
-                id: input.worksheetId,
-                userId: session.userId,
+        // If a worksheet is referenced, verify ownership before attaching it.
+        if (input.worksheetId) {
+            const worksheet = await db.worksheet.findFirst({
+                where: { id: input.worksheetId, userId },
+            });
+            if (!worksheet) {
+                return { success: false, error: "Worksheet not found or access denied" };
             }
-        });
-
-        if (!worksheet) {
-            return { success: false, error: "Worksheet not found or access denied" };
         }
 
         const quotation = await db.quotation.create({
             data: {
-                worksheetId: input.worksheetId,
+                userId,
+                worksheetId: input.worksheetId || null,
                 clientName: input.clientName,
+                clientPhone: input.clientPhone,
+                clientAddress: input.clientAddress,
                 quotationNumber: input.quotationNumber,
-                pricingData: input.pricingData,
+                pricingData: input.pricingData as never,
                 totalAmount: input.totalAmount,
-            }
+            },
         });
 
+        revalidatePath("/quotations");
         return { success: true, id: quotation.id };
     } catch (error) {
         console.error("Create Quotation Error:", error);
@@ -56,12 +63,14 @@ export async function getQuotation(id: string) {
 
         const quotation = await db.quotation.findUnique({
             where: { id },
-            include: { worksheet: true }
+            include: {
+                worksheet: true,
+                user: { select: { company: true, businessAddress: true, businessPhone: true, name: true } },
+            },
         });
 
         if (!quotation) return { success: false, error: "Not found" };
-
-        if (quotation.worksheet.userId !== session.userId) {
+        if (quotation.userId !== session.userId) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -69,5 +78,46 @@ export async function getQuotation(id: string) {
     } catch (error) {
         console.error("Get Quotation Error:", error);
         return { success: false, error: "Failed to fetch quotation" };
+    }
+}
+
+export async function listQuotations() {
+    try {
+        const session = await verifySession();
+        if (!session?.userId) {
+            return { success: false, error: "Unauthorized" as const, data: [] };
+        }
+
+        const quotations = await db.quotation.findMany({
+            where: { userId: session.userId as string },
+            orderBy: { createdAt: "desc" },
+        });
+
+        return { success: true, data: quotations };
+    } catch (error) {
+        console.error("List Quotations Error:", error);
+        return { success: false, error: "Failed to fetch quotations" as const, data: [] };
+    }
+}
+
+export async function updateQuotationStatus(id: string, status: QuotationStatus) {
+    try {
+        const session = await verifySession();
+        if (!session?.userId) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const quotation = await db.quotation.findUnique({ where: { id } });
+        if (!quotation || quotation.userId !== session.userId) {
+            return { success: false, error: "Not found or access denied" };
+        }
+
+        await db.quotation.update({ where: { id }, data: { status } });
+        revalidatePath("/quotations");
+        revalidatePath(`/quotations/${id}`);
+        return { success: true };
+    } catch (error) {
+        console.error("Update Quotation Status Error:", error);
+        return { success: false, error: "Failed to update status" };
     }
 }

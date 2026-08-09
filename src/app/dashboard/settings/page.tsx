@@ -1,7 +1,10 @@
 import { verifySession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Receipt } from "lucide-react";
 import { ProfileForm } from "./ProfileForm";
 
 export default async function SettingsPage() {
@@ -29,6 +32,21 @@ export default async function SettingsPage() {
                             initialCompany={user.company || ""}
                             email={user.email}
                         />
+                    </CardContent>
+                </Card>
+
+                <Card className="mt-6">
+                    <CardHeader>
+                        <CardTitle>Quotation Rate Card</CardTitle>
+                        <CardDescription>Set your material and labor pricing once, reused on every quotation.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Link href="/dashboard/rate-card">
+                            <Button variant="outline">
+                                <Receipt className="w-4 h-4 mr-2" />
+                                Manage Rate Card
+                            </Button>
+                        </Link>
                     </CardContent>
                 </Card>
             </div>

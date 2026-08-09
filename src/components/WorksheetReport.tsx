@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo } from "react";
-import { Printer, ArrowLeft, Download } from "lucide-react";
+import { Printer, ArrowLeft, Download, Receipt } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { CalculationResult, WindowInput, CuttingPlan } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
 interface WorksheetReportProps {
+    worksheetId: string;
     worksheetName: string;
     createdAt: Date;
     input: WindowInput;
@@ -93,6 +95,7 @@ const SummaryCard = ({ title, value, subValue, highlight = false }: { title: str
 );
 
 export default function WorksheetReport({
+    worksheetId,
     worksheetName,
     createdAt,
     input,
@@ -132,10 +135,18 @@ export default function WorksheetReport({
                         <ArrowLeft className="w-5 h-5 mr-2" />
                         Back to Dashboard
                     </Button>
-                    <Button onClick={handlePrint} variant="outline" className="border-slate-300 shadow-sm">
-                        <Printer className="w-4 h-4 mr-2" />
-                        Print / Save PDF
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Link href={`/quotations/create?worksheetId=${worksheetId}`}>
+                            <Button variant="outline" className="border-slate-300 shadow-sm">
+                                <Receipt className="w-4 h-4 mr-2" />
+                                Create Quotation
+                            </Button>
+                        </Link>
+                        <Button onClick={handlePrint} variant="outline" className="border-slate-300 shadow-sm">
+                            <Printer className="w-4 h-4 mr-2" />
+                            Print / Save PDF
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Main Report Container */}

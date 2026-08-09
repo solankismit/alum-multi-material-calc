@@ -17,7 +17,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/Dialog";
-import { Trash2, FileText, ExternalLink, Plus, Layers, ClipboardList } from "lucide-react";
+import { Trash2, FileText, ExternalLink, Plus, Layers, ClipboardList, Receipt } from "lucide-react";
 import { combineWorksheets } from "../worksheets/actions";
 
 
@@ -138,11 +138,17 @@ export default function WorksheetList() {
                     <p className="mt-1 text-sm text-gray-500 max-w-sm">
                         Get started by creating a new calculation and saving it as a worksheet.
                     </p>
-                    <div className="mt-6">
+                    <div className="mt-6 flex items-center justify-center gap-3">
                         <Link href="/">
                             <Button>
                                 <Plus className="mr-2 h-4 w-4" />
                                 New Calculation
+                            </Button>
+                        </Link>
+                        <Link href="/quotations/create">
+                            <Button variant="outline">
+                                <Receipt className="mr-2 h-4 w-4" />
+                                New Quotation
                             </Button>
                         </Link>
                     </div>
@@ -159,12 +165,20 @@ export default function WorksheetList() {
                         <CardTitle>My Worksheets</CardTitle>
                         <CardDescription>View and manage your saved calculations.</CardDescription>
                     </div>
-                    <Link href="/">
-                        <Button size="sm">
-                            <Plus className="mr-2 h-4 w-4" />
-                            New
-                        </Button>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                        <Link href="/quotations/create">
+                            <Button size="sm" variant="outline">
+                                <Receipt className="mr-2 h-4 w-4" />
+                                New Quotation
+                            </Button>
+                        </Link>
+                        <Link href="/">
+                            <Button size="sm">
+                                <Plus className="mr-2 h-4 w-4" />
+                                New
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
             </CardHeader>
             <CardContent className="pb-24">
@@ -199,6 +213,12 @@ export default function WorksheetList() {
                                     <Link href={`/worksheets/${worksheet.id}`}>
                                         <Button variant="ghost" size="sm" className="h-8 px-3 text-gray-600">
                                             Open
+                                        </Button>
+                                    </Link>
+                                    <Link href={`/quotations/create?worksheetId=${worksheet.id}`}>
+                                        <Button variant="ghost" size="sm" className="h-8 px-3 text-indigo-600">
+                                            <Receipt className="h-4 w-4 mr-1.5" />
+                                            Quote
                                         </Button>
                                     </Link>
                                     <Button
@@ -262,6 +282,12 @@ export default function WorksheetList() {
                                                         <Button variant="ghost" className="h-10 w-10 !p-3.5">
                                                             <ExternalLink className="h-5 w-5" />
                                                             <span className="sr-only">Open</span>
+                                                        </Button>
+                                                    </Link>
+                                                    <Link href={`/quotations/create?worksheetId=${worksheet.id}`}>
+                                                        <Button variant="ghost" className="h-10 w-10 !p-3.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
+                                                            <Receipt className="h-5 w-5" />
+                                                            <span className="sr-only">Create Quotation</span>
                                                         </Button>
                                                     </Link>
                                                     <Button

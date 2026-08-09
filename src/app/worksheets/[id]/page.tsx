@@ -40,6 +40,7 @@ export default async function WorksheetDetailPage({
 
     return (
         <WorksheetReport
+            worksheetId={worksheet.id}
             worksheetName={worksheet.name}
             createdAt={worksheet.createdAt}
             input={input}

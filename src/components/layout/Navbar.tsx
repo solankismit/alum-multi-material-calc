@@ -56,6 +56,17 @@ export default function Navbar({ user }: NavbarProps) {
                                     Dashboard
                                 </Link>
                             )}
+                            {user && (
+                                <Link
+                                    href="/quotations"
+                                    className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${isActive("/quotations")
+                                        ? "border-slate-900 text-slate-900"
+                                        : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                                        }`}
+                                >
+                                    Quotations
+                                </Link>
+                            )}
                             {user?.role === "ADMIN" && (
                                 <Link
                                     href="/admin"
@@ -139,6 +150,18 @@ export default function Navbar({ user }: NavbarProps) {
                                     }`}
                             >
                                 Dashboard
+                            </Link>
+                        )}
+                        {user && (
+                            <Link
+                                href="/quotations"
+                                onClick={() => setIsMenuOpen(false)}
+                                className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${isActive("/quotations")
+                                    ? "bg-slate-50 border-slate-500 text-slate-700"
+                                    : "border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
+                                    }`}
+                            >
+                                Quotations
                             </Link>
                         )}
                         {user?.role === "ADMIN" && (
