@@ -5,6 +5,7 @@ import {
   validateSectionDimensions,
   validateDimension,
 } from "@/utils/dimensionValidation";
+import { DEFAULT_KERF_WIDTH_MM } from "@/utils/stockOptimization";
 import type { WindowInput, WindowSection, WindowDimension, SectionWithConfigs } from "@/types";
 import { uiStyles } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -29,7 +30,6 @@ interface WindowFormProps {
 }
 
 const KERF_STORAGE_KEY = "alum_kerf_width_mm";
-const DEFAULT_KERF_WIDTH_MM = 3;
 
 export default function WindowForm({ onCalculate, onReset, initialValues, allSections }: WindowFormProps) {
   const [unitMode, setUnitMode] = useState<"mm" | "ft">("mm");

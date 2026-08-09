@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { z } from "zod";
 
@@ -13,7 +13,7 @@ const profileSchema = z.object({
 
 export async function PATCH(req: NextRequest) {
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest) {
         }
 
         await db.user.update({
-            where: { id: session.userId },
+            where: { id: session.userId as string },
             data: {
                 name: result.data.name,
                 company: result.data.company,

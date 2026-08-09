@@ -1,7 +1,7 @@
 "use server";
 
 import { getQuotation } from "../actions";
-import { formatCurrency } from "@/utils/formatters";
+import { formatCurrency, AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 import ClientPrintButton from "@/app/worksheets/orderbook/ClientPrintButton";
 import QuotationHeaderActions from "./QuotationHeaderActions";
 import QuotationStatusActions from "./QuotationStatusActions";
@@ -53,8 +53,6 @@ interface QuotationPricing {
 }
 
 const DEFAULT_TERMS = "Payment terms: 50% advance, balance upon completion.\nValid for 30 days from date of issue.";
-
-const AREA_SQMM_PER_SQFT = 92903;
 
 export default async function QuotationView({ params }: PageProps) {
     const { id } = await params;

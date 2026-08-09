@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { revalidateTag } from "next/cache";
@@ -35,7 +35,7 @@ export async function GET(
 ) {
     const { id } = await params;
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId || session.role !== "ADMIN") {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -66,7 +66,7 @@ export async function DELETE(
 ) {
     const { id } = await params;
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId || session.role !== "ADMIN") {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -92,7 +92,7 @@ export async function PUT(
 ) {
     const { id } = await params;
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId || session.role !== "ADMIN") {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }

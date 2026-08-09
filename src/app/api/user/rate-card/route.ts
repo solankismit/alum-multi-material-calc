@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { z } from "zod";
 
@@ -19,7 +19,7 @@ const rateCardSchema = z.object({
 });
 
 export async function GET() {
-    const session = await verifySession();
+    const session = await getSession();
     if (!session?.userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -29,7 +29,7 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-    const session = await verifySession();
+    const session = await getSession();
     if (!session?.userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

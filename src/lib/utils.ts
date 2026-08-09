@@ -6,11 +6,28 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const uiStyles = {
-    card: "bg-white border border-slate-200 rounded-xl shadow-sm",
-    cardHover: "transition-all hover:shadow-md hover:border-slate-300",
+    card: "bg-surface border border-border rounded-xl shadow-sm",
+    cardHover: "transition-all hover:shadow-md hover:border-border-strong",
+    sectionCard: "relative p-3 sm:p-6 bg-surface border border-border rounded-xl shadow-sm transition-all hover:shadow-md hover:border-border-strong",
+    darkPanel: "bg-surface-inverse rounded-xl shadow-lg p-4 text-text-inverse",
     selectableButton: {
         base: "border-2 transition-all duration-200",
-        active: "border-indigo-600 bg-indigo-50/50 text-indigo-900 shadow-sm",
-        inactive: "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50",
-    }
-}
+        active: "border-primary bg-primary/5 text-primary shadow-sm",
+        inactive: "border-border text-text-muted hover:border-border-strong hover:bg-surface-muted",
+    },
+    badge: {
+        base: "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
+        neutral: "bg-surface-muted text-text-muted border border-border",
+        primary: "bg-primary/10 text-primary border border-primary/20",
+        success: "bg-success-surface text-success border border-success-border",
+        warning: "bg-warning-surface text-warning border border-warning-border",
+        danger: "bg-danger-surface text-danger border border-danger-border",
+    },
+    container: {
+        narrow: "max-w-2xl",
+        medium: "max-w-4xl",
+        wide: "max-w-7xl",
+    },
+} as const
+
+export type BadgeVariant = Exclude<keyof typeof uiStyles.badge, "base">

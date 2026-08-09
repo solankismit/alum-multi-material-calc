@@ -1,4 +1,5 @@
 import type { CuttingPlan } from "../types";
+import { sqMmToSqFt } from "./formatters";
 
 export interface AggregatedPlan {
   stockLength: number;
@@ -65,6 +66,5 @@ export function getPieceDescription(pieces: number[], types?: string[]) {
 }
 
 export function formatArea(areaSqMm: number) {
-  const sqFt = areaSqMm / 92903;
-  return sqFt.toFixed(2);
+  return sqMmToSqFt(areaSqMm).toFixed(2);
 }

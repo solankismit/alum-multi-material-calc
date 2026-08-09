@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { verifySession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import type { QuotationStatus } from "@prisma/client";
 
@@ -29,7 +29,7 @@ async function nextQuotationNumber(userId: string): Promise<string> {
 
 export async function createQuotation(input: QuotationInput) {
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId) {
             return { success: false, error: "Unauthorized" };
         }
@@ -72,7 +72,7 @@ export async function createQuotation(input: QuotationInput) {
 
 export async function duplicateQuotation(id: string) {
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId) {
             return { success: false, error: "Unauthorized" };
         }
@@ -111,7 +111,7 @@ export async function duplicateQuotation(id: string) {
 
 export async function getQuotation(id: string) {
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId) {
             return { success: false, error: "Unauthorized" };
         }
@@ -138,7 +138,7 @@ export async function getQuotation(id: string) {
 
 export async function listQuotations() {
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId) {
             return { success: false, error: "Unauthorized" as const, data: [] };
         }
@@ -157,7 +157,7 @@ export async function listQuotations() {
 
 export async function updateQuotationStatus(id: string, status: QuotationStatus) {
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId) {
             return { success: false, error: "Unauthorized" };
         }

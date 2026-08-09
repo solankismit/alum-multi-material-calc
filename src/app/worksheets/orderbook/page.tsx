@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import ClientPrintButton from "./ClientPrintButton";
+import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 // import ClientPrintButton from "./ClientPrintButton"; // We'll create this small client component
 
 interface OrderbookParams {
@@ -348,7 +349,7 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
                                                                     {item.totalQuantity} <span className="font-normal text-xs text-slate-500 ml-1">pieces</span>
                                                                 </td>
                                                                 <td className="px-4 py-3 text-right text-slate-600 font-medium">
-                                                                    {(item.totalArea / 92903).toFixed(2)}
+                                                                    {(item.totalArea / AREA_SQMM_PER_SQFT).toFixed(2)}
                                                                 </td>
                                                             </tr>
                                                         ))}
@@ -356,7 +357,7 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
                                                             <td className="px-4 py-3 text-right text-slate-300 text-xs uppercase tracking-wider">Total Glass Area</td>
                                                             <td className="px-4 py-3"></td>
                                                             <td className="px-4 py-3 text-right text-lg">
-                                                                {(group.totalGlassArea / 92903).toFixed(2)} sq.ft
+                                                                {(group.totalGlassArea / AREA_SQMM_PER_SQFT).toFixed(2)} sq.ft
                                                             </td>
                                                         </tr>
                                                     </tbody>

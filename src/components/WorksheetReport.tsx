@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { aggregatePlans, getPieceDescription } from "@/utils/cuttingPlanHelpers";
 import { resolveMaterialCategory, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
 import PrintStyles from "@/components/PrintStyles";
+import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 
 interface WorksheetReportProps {
     worksheetId: string;
@@ -58,7 +59,7 @@ export default function WorksheetReport({
     });
 
     // --- Global Calculations ---
-    const totalGlassAreaSqFt = (result.combinedSummary.totalGlassArea || 0) / 92903;
+    const totalGlassAreaSqFt = (result.combinedSummary.totalGlassArea || 0) / AREA_SQMM_PER_SQFT;
     const totalWastageFt = (result.combinedSummary.totalWastage || 0) / 304.8;
 
     return (
@@ -143,7 +144,7 @@ export default function WorksheetReport({
                                 {result.combinedSummary.totalMosquitoArea !== undefined && result.combinedSummary.totalMosquitoArea > 0 && (
                                     <SummaryCard
                                         title="Total Mosquito Area"
-                                        value={`${(result.combinedSummary.totalMosquitoArea / 92903).toFixed(2)} sq.ft`}
+                                        value={`${(result.combinedSummary.totalMosquitoArea / AREA_SQMM_PER_SQFT).toFixed(2)} sq.ft`}
                                         subValue="Across all sections"
                                     />
                                 )}
@@ -195,14 +196,14 @@ export default function WorksheetReport({
                                                             {glass.glassSize.width.toFixed(1)} x {glass.glassSize.height.toFixed(1)}
                                                         </td>
                                                         <td className="px-4 py-3 text-center">{glass.quantity}</td>
-                                                        <td className="px-4 py-3 text-right text-slate-500">{(glass.glassSize.area / 92903).toFixed(2)}</td>
-                                                        <td className="px-4 py-3 text-right font-medium text-slate-700">{(glass.glassSize.totalArea / 92903).toFixed(2)}</td>
+                                                        <td className="px-4 py-3 text-right text-slate-500">{(glass.glassSize.area / AREA_SQMM_PER_SQFT).toFixed(2)}</td>
+                                                        <td className="px-4 py-3 text-right font-medium text-slate-700">{(glass.glassSize.totalArea / AREA_SQMM_PER_SQFT).toFixed(2)}</td>
                                                     </tr>
                                                 ))}
                                                 <tr className="bg-slate-50 font-bold">
                                                     <td colSpan={5} className="px-4 py-3 text-right text-slate-700">Total Glass Area</td>
                                                     <td className="px-4 py-3 text-right text-indigo-700">
-                                                        {(secResult.glassInfo.reduce((acc, g) => acc + g.glassSize.totalArea, 0) / 92903).toFixed(2)} sq.ft
+                                                        {(secResult.glassInfo.reduce((acc, g) => acc + g.glassSize.totalArea, 0) / AREA_SQMM_PER_SQFT).toFixed(2)} sq.ft
                                                     </td>
                                                 </tr>
                                             </tbody>

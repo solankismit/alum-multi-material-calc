@@ -1,17 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { z } from "zod";
 
+const dimensionSchema = z.object({
+    id: z.string(),
+    height: z.number().nullable(),
+    width: z.number().nullable(),
+    quantity: z.number().nullable(),
+    sections: z.number().nullable().optional(),
+});
+
+const sectionSchema = z.object({
+    id: z.string(),
+    sectionTypeId: z.string().optional(),
+    name: z.string(),
+    dimensions: z.array(dimensionSchema),
+    trackType: z.string(),
+    configuration: z.string(),
+    hasTrackRail: z.boolean().optional(),
+    mosquitoMeshGrade: z.string().optional(),
+    stockMap: z.record(z.string(), z.unknown()).optional(),
+});
+
+const windowInputSchema = z.object({
+    sections: z.array(sectionSchema),
+    kerfWidthMm: z.number().optional(),
+});
+
 const createWorksheetSchema = z.object({
     name: z.string().min(1, "Name is required"),
-    data: z.any(), // WindowInput + Result
+    data: z.object({
+        input: windowInputSchema,
+        // The computed CalculationResult is server-derived and structurally
+        // deep — validated as "some object" rather than mirroring every
+        // nested summary field, which would drift out of sync with
+        // src/types/index.ts as the calculation logic evolves.
+        result: z.record(z.string(), z.unknown()).nullable(),
+    }),
 });
 
 // GET: List all worksheets for the authenticated user
 export async function GET(req: NextRequest) {
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -41,7 +73,7 @@ export async function GET(req: NextRequest) {
 // POST: Create a new worksheet
 export async function POST(req: NextRequest) {
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -62,7 +94,7 @@ export async function POST(req: NextRequest) {
             data: {
                 userId: session.userId as string,
                 name,
-                data,
+                data: JSON.parse(JSON.stringify(data)),
             },
         });
 

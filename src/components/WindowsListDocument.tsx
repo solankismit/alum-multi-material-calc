@@ -6,14 +6,13 @@ import { WindowInput } from "@/types";
 import { Button } from "@/components/ui/Button";
 import WindowSchematic from "@/components/WindowSchematic";
 import PrintStyles from "@/components/PrintStyles";
+import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 
 interface WindowsListDocumentProps {
     worksheetName: string;
     createdAt: Date;
     input: WindowInput | null;
 }
-
-const AREA_SQMM_PER_SQFT = 92903;
 
 export default function WindowsListDocument({ worksheetName, createdAt, input }: WindowsListDocumentProps) {
     const router = useRouter();

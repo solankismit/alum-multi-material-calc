@@ -104,6 +104,8 @@ model Worksheet {
   updatedAt DateTime @updatedAt
 
   quotations Quotation[]
+
+  @@index([userId])
 }
 
 enum QuotationStatus {
@@ -137,6 +139,9 @@ model Quotation {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([worksheetId])
 }
 
 // One reusable rate card per user — set prices once, every quotation pulls

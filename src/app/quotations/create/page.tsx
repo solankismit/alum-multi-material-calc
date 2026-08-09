@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { formatCurrency } from "@/utils/formatters";
+import { formatCurrency, AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
@@ -115,7 +115,7 @@ function computeOverallAreaSqFt(sections: WindowInput["sections"] | undefined): 
             }
         });
     });
-    return totalSqMm / 92903;
+    return totalSqMm / AREA_SQMM_PER_SQFT;
 }
 
 export default function QuotationBuilder() {
@@ -232,8 +232,6 @@ export default function QuotationBuilder() {
 
     const totals = useMemo(() => {
         if (worksheetId) {
-            const AREA_SQMM_PER_SQFT = 92903;
-
             const sectionBreakdowns: SectionPricing[] = sectionResults.map((section) => {
                 const inputSection = windowInput?.sections.find((s) => s.id === section.sectionId);
                 const firstDim = inputSection?.dimensions?.[0];

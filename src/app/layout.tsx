@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
+import { ToastProvider } from "@/components/ui/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,10 +41,12 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}
       >
-        <Navbar user={user} />
-        <main className="flex-grow">
-          {children}
-        </main>
+        <ToastProvider>
+          <Navbar user={user} />
+          <main className="flex-grow">
+            {children}
+          </main>
+        </ToastProvider>
       </body>
     </html>
   );

@@ -1,13 +1,13 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { verifySession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { WindowInput, CalculationResult, MaterialStockMap } from "@/types";
 import { calculateMaterials } from "@/utils/calculations";
 
 export async function combineWorksheets(worksheetIds: string[], newName: string) {
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId) {
             return { success: false, error: "Unauthorized" };
         }
@@ -61,7 +61,7 @@ export async function combineWorksheets(worksheetIds: string[], newName: string)
         // 5. Save new worksheet
         const newWorksheet = await db.worksheet.create({
             data: {
-                userId: session.userId,
+                userId: session.userId as string,
                 name: newName,
                 data: JSON.parse(JSON.stringify({
                     input: mergedInput,

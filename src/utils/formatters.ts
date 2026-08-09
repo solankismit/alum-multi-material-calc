@@ -1,3 +1,9 @@
+export const AREA_SQMM_PER_SQFT = 92903;
+
+export function sqMmToSqFt(areaSqMm: number): number {
+  return areaSqMm / AREA_SQMM_PER_SQFT;
+}
+
 export function mmToFeet(mm: number): string {
   const feet = mm / 304.8;
   return feet.toFixed(2);

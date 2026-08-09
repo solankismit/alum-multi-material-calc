@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { revalidateTag } from "next/cache";
@@ -32,7 +32,7 @@ const sectionSchema = z.object({
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await verifySession();
+        const session = await getSession();
         if (!session?.userId || session.role !== "ADMIN") {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
