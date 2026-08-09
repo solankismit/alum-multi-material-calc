@@ -13,12 +13,17 @@ export default async function RateCardPage() {
 
     const initial = {
         profileRatePerFt: rateCard?.profileRatePerFt ?? 0,
+        profileRates: (rateCard?.profileRates as Record<string, number>) ?? {},
         glassRates: (rateCard?.glassRates as Record<string, number>) ?? {},
         hardwareRates: (rateCard?.hardwareRates as Record<string, number>) ?? {},
+        laborMode: (rateCard?.laborMode as "flat" | "percentOfMaterial" | "perSqft") ?? "flat",
         laborDefault: rateCard?.laborDefault ?? 0,
+        laborPercent: rateCard?.laborPercent ?? 0,
+        laborRatePerSqft: rateCard?.laborRatePerSqft ?? 0,
         overheadDefault: rateCard?.overheadDefault ?? 0,
         profitMarginDefault: rateCard?.profitMarginDefault ?? 0,
         taxRateDefault: rateCard?.taxRateDefault ?? 0,
+        termsText: rateCard?.termsText ?? "",
     };
 
     return (

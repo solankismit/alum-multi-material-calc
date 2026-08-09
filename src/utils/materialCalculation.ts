@@ -151,7 +151,8 @@ function createFrameMaterial(
   widthPieces: PieceCount[],
   heightPieces: PieceCount[],
   differentFrameMaterials: boolean,
-  stockMap?: MaterialStockMap
+  stockMap?: MaterialStockMap,
+  kerfWidthMm?: number
 ): MaterialRequirement[] {
   if (differentFrameMaterials) {
     const frameWidthReqs: PieceRequirement[] = widthPieces.map((p) => ({
@@ -161,18 +162,20 @@ function createFrameMaterial(
       length: p.length, count: p.count, type: `height-${p.length}`
     }));
 
-    const widthBreakdown = optimizeCombinedStockUsage(frameWidthReqs, stockMap?.['frameWidth']);
-    const heightBreakdown = optimizeCombinedStockUsage(frameHeightReqs, stockMap?.['frameHeight']);
+    const widthBreakdown = optimizeCombinedStockUsage(frameWidthReqs, stockMap?.['frameWidth'], kerfWidthMm);
+    const heightBreakdown = optimizeCombinedStockUsage(frameHeightReqs, stockMap?.['frameHeight'], kerfWidthMm);
 
     return [
       {
         component: "Frame (Width)",
+        category: "frame",
         totalRequired: widthPieces.reduce((sum, p) => sum + p.length * p.count, 0),
         stockBreakdown: widthBreakdown,
         description: `Frame Widths: ${widthPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")}`,
       },
       {
         component: "Frame (Height)",
+        category: "frame",
         totalRequired: heightPieces.reduce((sum, p) => sum + p.length * p.count, 0),
         stockBreakdown: heightBreakdown,
         description: `Frame Heights: ${heightPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")}`,
@@ -186,7 +189,7 @@ function createFrameMaterial(
     ...heightPieces.map((p) => ({ length: p.length, count: p.count, type: `height-${p.length}` })),
   ];
 
-  const frameBreakdown = optimizeCombinedStockUsage(framePieceRequirements, stockMap?.['frameWidth']);
+  const frameBreakdown = optimizeCombinedStockUsage(framePieceRequirements, stockMap?.['frameWidth'], kerfWidthMm);
   const frameTotal = widthPieces.reduce((sum, p) => sum + p.length * p.count, 0) + heightPieces.reduce((sum, p) => sum + p.length * p.count, 0);
 
   const frameWidthDesc = widthPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ");
@@ -194,6 +197,7 @@ function createFrameMaterial(
 
   return [{
     component: "Frame (Combined)",
+    category: "frame",
     totalRequired: frameTotal,
     stockBreakdown: frameBreakdown,
     description: `Frame: ${frameWidthDesc} width + ${frameHeightDesc} height`,
@@ -204,7 +208,8 @@ function createShutterMaterial(
   dimensions: WindowDimension[],
   sectionConfig: ReturnType<typeof getSectionConfig>,
   sectionConfigData: SectionConfiguration,
-  stockMap?: MaterialStockMap
+  stockMap?: MaterialStockMap,
+  kerfWidthMm?: number
 ): MaterialRequirement[] {
   const { configuration } = sectionConfig;
   const separateMosquito = sectionConfigData.separateMosquitoNet && configuration === "glass-mosquito";
@@ -244,14 +249,16 @@ function createShutterMaterial(
     return [
       {
         component: "Shutter - Glass",
+        category: "shutter",
         totalRequired: glassReqs.reduce((sum, p) => sum + p.length * p.count, 0),
-        stockBreakdown: optimizeCombinedStockUsage(glassReqs, stockMap?.['shutterGlass']),
+        stockBreakdown: optimizeCombinedStockUsage(glassReqs, stockMap?.['shutterGlass'], kerfWidthMm),
         description: `Shutter Glass: ${glassHeightPieces[0]?.count || 0}H + ${glassWidthPieces[0]?.count || 0}W`,
       },
       {
         component: "Shutter - Mosquito",
+        category: "shutter",
         totalRequired: mosqReqs.reduce((sum, p) => sum + p.length * p.count, 0),
-        stockBreakdown: optimizeCombinedStockUsage(mosqReqs, stockMap?.['shutterMosquito']),
+        stockBreakdown: optimizeCombinedStockUsage(mosqReqs, stockMap?.['shutterMosquito'], kerfWidthMm),
         description: `Shutter Mosquito: ${mosquitoHeightPieces[0]?.count || 0}H + ${mosquitoWidthPieces[0]?.count || 0}W`,
       }
     ];
@@ -267,8 +274,9 @@ function createShutterMaterial(
   ];
   return [{
     component: `Shutter (Combined) - ${sectionConfig.getShutterLabel()}`,
+    category: "shutter",
     totalRequired: shutterPieceRequirements.reduce((sum, p) => sum + p.length * p.count, 0),
-    stockBreakdown: optimizeCombinedStockUsage(shutterPieceRequirements, stockMap?.['shutterGlass']),
+    stockBreakdown: optimizeCombinedStockUsage(shutterPieceRequirements, stockMap?.['shutterGlass'], kerfWidthMm),
     description: `Shutter: ${heightPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")} H + ${widthPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")} W`,
   }];
 }
@@ -279,7 +287,8 @@ function createShutterMaterial(
 function createInterlockMaterial(
   interlockPieces: PieceCount[],
   trackType: string,
-  stockOptions?: StockOption[]
+  stockOptions?: StockOption[],
+  kerfWidthMm?: number
 ): MaterialRequirement {
   const interlockPieceRequirements: PieceRequirement[] = interlockPieces.map(
     (p) => ({
@@ -300,10 +309,10 @@ function createInterlockMaterial(
     // All same length - use simple optimization
     const length = interlockPieces[0].length;
     const totalCount = interlockPieces.reduce((sum, p) => sum + p.count, 0);
-    interlockBreakdown = optimizeStockUsage(length, totalCount, stockOptions);
+    interlockBreakdown = optimizeStockUsage(length, totalCount, stockOptions, kerfWidthMm);
   } else {
     // Different lengths - use combined optimization
-    interlockBreakdown = optimizeCombinedStockUsage(interlockPieceRequirements, stockOptions);
+    interlockBreakdown = optimizeCombinedStockUsage(interlockPieceRequirements, stockOptions, kerfWidthMm);
   }
 
   const interlockDesc = interlockPieces
@@ -312,6 +321,7 @@ function createInterlockMaterial(
 
   return {
     component: "Interlock",
+    category: "interlock",
     totalRequired: interlockTotal,
     stockBreakdown: interlockBreakdown,
     description: `Interlock clips: ${interlockDesc}`,
@@ -321,7 +331,8 @@ function createInterlockMaterial(
 function createTrackRailMaterial(
   dimensions: WindowDimension[],
   calculateTrackRailPieces: (w: number, q: number) => { length: number; count: number },
-  stockOptions?: StockOption[]
+  stockOptions?: StockOption[],
+  kerfWidthMm?: number
 ): MaterialRequirement | null {
   const pieces: PieceCount[] = [];
   dimensions.forEach(dim => {
@@ -334,15 +345,17 @@ function createTrackRailMaterial(
   const reqs = pieces.map(p => ({ length: p.length, count: p.count, type: `track-${p.length}` }));
   return {
     component: "Track Rail",
+    category: "trackRail",
     totalRequired: pieces.reduce((sum, p) => sum + p.length * p.count, 0),
-    stockBreakdown: optimizeCombinedStockUsage(reqs, stockOptions),
+    stockBreakdown: optimizeCombinedStockUsage(reqs, stockOptions, kerfWidthMm),
     description: `Track Rails: ${pieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")}`,
   };
 }
 function createMullionMaterial(
   dimensions: WindowDimension[],
   calculateMullionPieces: (h: number, q: number, s?: number) => { length: number; count: number } | null,
-  stockOptions?: StockOption[]
+  stockOptions?: StockOption[],
+  kerfWidthMm?: number
 ): MaterialRequirement | null {
   const pieces: PieceCount[] = [];
   dimensions.forEach(dim => {
@@ -356,8 +369,9 @@ function createMullionMaterial(
   const reqs = pieces.map(p => ({ length: p.length, count: p.count, type: `mullion-${p.length}` }));
   return {
     component: "Mullion",
+    category: "mullion",
     totalRequired: pieces.reduce((sum, p) => sum + p.length * p.count, 0),
-    stockBreakdown: optimizeCombinedStockUsage(reqs, stockOptions),
+    stockBreakdown: optimizeCombinedStockUsage(reqs, stockOptions, kerfWidthMm),
     description: `Mullion Pieces: ${pieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ")}`,
   };
 }
@@ -375,7 +389,8 @@ export function calculateSectionMaterials(
     hasTrackRail?: boolean;
   },
   sectionConfigData: SectionConfiguration & { systemType?: string },
-  stockMap?: MaterialStockMap
+  stockMap?: MaterialStockMap,
+  kerfWidthMm?: number
 ): SectionMaterialsResult {
   const { trackType, configuration, dimensions } = section;
 
@@ -410,10 +425,10 @@ export function calculateSectionMaterials(
 
   // Calculate frame pieces
   const { widthPieces, heightPieces } = calculateFramePieces(validDimensions);
-  materials.push(...createFrameMaterial(widthPieces, heightPieces, sectionConfigData.differentFrameMaterials, stockMap));
+  materials.push(...createFrameMaterial(widthPieces, heightPieces, sectionConfigData.differentFrameMaterials, stockMap, kerfWidthMm));
 
   // Calculate shutter pieces
-  materials.push(...createShutterMaterial(validDimensions, sectionConfig, sectionConfigData, stockMap));
+  materials.push(...createShutterMaterial(validDimensions, sectionConfig, sectionConfigData, stockMap, kerfWidthMm));
 
   // Calculate interlock pieces
   const interlockPieces = calculateInterlockPieces(
@@ -421,20 +436,20 @@ export function calculateSectionMaterials(
     sectionConfig.calculateInterlockLength,
     sectionConfig.calculateInterlockCount
   );
-  materials.push(createInterlockMaterial(interlockPieces, trackType, stockMap?.['interlock']));
+  materials.push(createInterlockMaterial(interlockPieces, trackType, stockMap?.['interlock'], kerfWidthMm));
 
   // Calculate track rail pieces
   // Check both sectionConfig.hasTrackRail (from template) and section.hasTrackRail (from instance)
   const effectiveHasTrackRail = sectionConfig.hasTrackRail && (section.hasTrackRail !== false);
 
   if (effectiveHasTrackRail && sectionConfig.calculateTrackRailPieces && sectionConfig.calculateTrackRailPieces != null) {
-    const trackRailMat = createTrackRailMaterial(validDimensions, sectionConfig.calculateTrackRailPieces, stockMap?.['trackRail']);
+    const trackRailMat = createTrackRailMaterial(validDimensions, sectionConfig.calculateTrackRailPieces, stockMap?.['trackRail'], kerfWidthMm);
     if (trackRailMat) materials.push(trackRailMat);
   }
 
   // Calculate mullion pieces (Openable specific)
   if (sectionConfig.calculateMullionPieces) {
-    const mullionMat = createMullionMaterial(validDimensions, sectionConfig.calculateMullionPieces, stockMap?.['mullion']);
+    const mullionMat = createMullionMaterial(validDimensions, sectionConfig.calculateMullionPieces, stockMap?.['mullion'], kerfWidthMm);
     if (mullionMat) materials.push(mullionMat);
   }
 

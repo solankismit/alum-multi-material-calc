@@ -5,12 +5,17 @@ import { z } from "zod";
 
 const rateCardSchema = z.object({
     profileRatePerFt: z.number().min(0),
+    profileRates: z.record(z.string(), z.number().min(0)).default({}),
     glassRates: z.record(z.string(), z.number().min(0)),
     hardwareRates: z.record(z.string(), z.number().min(0)),
+    laborMode: z.enum(["flat", "percentOfMaterial", "perSqft"]).default("flat"),
     laborDefault: z.number().min(0),
+    laborPercent: z.number().min(0).default(0),
+    laborRatePerSqft: z.number().min(0).default(0),
     overheadDefault: z.number().min(0),
     profitMarginDefault: z.number().min(0),
     taxRateDefault: z.number().min(0),
+    termsText: z.string().default(""),
 });
 
 export async function GET() {

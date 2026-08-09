@@ -1,12 +1,15 @@
 "use client";
 
 import { useMemo } from "react";
-import { Printer, ArrowLeft, Download, Receipt } from "lucide-react";
+import { Printer, ArrowLeft, Download, Receipt, Scissors, List } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CalculationResult, WindowInput, CuttingPlan } from "@/types";
+import { CalculationResult, WindowInput } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { aggregatePlans, getPieceDescription } from "@/utils/cuttingPlanHelpers";
+import { resolveMaterialCategory, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
+import PrintStyles from "@/components/PrintStyles";
 
 interface WorksheetReportProps {
     worksheetId: string;
@@ -15,73 +18,6 @@ interface WorksheetReportProps {
     input: WindowInput;
     result: CalculationResult | null;
     sectionName?: string;
-}
-
-// Helper Types for Aggregation
-interface AggregatedPlan {
-    stockLength: number;
-    stockName: string;
-    pieces: number[];
-    pieceTypes?: string[];
-    wastage: number;
-    count: number; // Multiplier (e.g., 4x)
-}
-
-// --- Helper Functions ---
-
-function aggregatePlans(plans: CuttingPlan[], stockLength: number, stockName: string): AggregatedPlan[] {
-    const groups: { [key: string]: AggregatedPlan } = {};
-
-    plans.forEach(plan => {
-        // Create a unique key based on pieces and their types
-        // Sort pieces to ensure consistent key if order doesn't matter, 
-        // but typically order matches the visual cut, so we might keep order.
-        // For strict equality of "cutting pattern", exact sequence matters.
-        const piecesKey = plan.pieces.join(',');
-        const typesKey = plan.pieceTypes ? plan.pieceTypes.join(',') : '';
-        const key = `${piecesKey}|${typesKey}|${plan.wastage}`;
-
-        if (!groups[key]) {
-            groups[key] = {
-                stockLength,
-                stockName: plan.stockName || stockName,
-                pieces: plan.pieces,
-                pieceTypes: plan.pieceTypes,
-                wastage: plan.wastage,
-                count: 0
-            };
-        }
-        groups[key].count++;
-    });
-
-    // Return sorted by count (most frequent first)
-    return Object.values(groups).sort((a, b) => b.count - a.count);
-}
-
-function getPieceDescription(pieces: number[], types?: string[]) {
-    // Group by Type (Width vs Height vs Interlock) AND Length
-    const summary: { [key: string]: number } = {};
-
-    pieces.forEach((len, idx) => {
-        const typeRaw = types?.[idx];
-        let label = "Piece";
-        if (typeRaw) {
-            if (typeRaw.includes("width")) label = "Width";
-            else if (typeRaw.includes("height")) label = "Height";
-            else if (typeRaw.includes("interlock")) label = "Interlock";
-        }
-        const key = `${label} ${len}mm`;
-        summary[key] = (summary[key] || 0) + 1;
-    });
-
-    return Object.entries(summary)
-        .map(([key, count]) => `${count}x ${key}`)
-        .join(", ");
-}
-
-function formatArea(areaSqMm: number) {
-    const sqFt = areaSqMm / 92903;
-    return sqFt.toFixed(2);
 }
 
 // --- Sub-Components ---
@@ -126,7 +62,8 @@ export default function WorksheetReport({
     const totalWastageFt = (result.combinedSummary.totalWastage || 0) / 304.8;
 
     return (
-        <div className="min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 font-sans">
+        <div className="min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 print:p-0 font-sans">
+            <PrintStyles />
             <div className="max-w-6xl mx-auto space-y-8 print:space-y-6">
 
                 {/* Header Actions */}
@@ -136,6 +73,18 @@ export default function WorksheetReport({
                         Back to Dashboard
                     </Button>
                     <div className="flex items-center gap-2">
+                        <Link href={`/worksheets/${worksheetId}/windows-list`}>
+                            <Button variant="outline" className="border-slate-300 shadow-sm">
+                                <List className="w-4 h-4 mr-2" />
+                                Windows List
+                            </Button>
+                        </Link>
+                        <Link href={`/worksheets/${worksheetId}/cutting-plan`}>
+                            <Button variant="outline" className="border-slate-300 shadow-sm">
+                                <Scissors className="w-4 h-4 mr-2" />
+                                Cutting Plan
+                            </Button>
+                        </Link>
                         <Link href={`/quotations/create?worksheetId=${worksheetId}`}>
                             <Button variant="outline" className="border-slate-300 shadow-sm">
                                 <Receipt className="w-4 h-4 mr-2" />
@@ -164,7 +113,7 @@ export default function WorksheetReport({
                                     </div>
                                 )}
                             </div>
-                            <div className="text-right hidden sm:block">
+                            <div className="text-right hidden sm:block print:block">
                                 <div className="text-4xl font-black text-indigo-400 print:text-black opacity-20 print:opacity-100">REPORT</div>
                             </div>
                         </div>
@@ -179,7 +128,7 @@ export default function WorksheetReport({
                                 <span className="w-2 h-2 bg-indigo-600 rounded-full"></span>
                                 Project Summary
                             </h3>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 print:grid-cols-4 gap-4">
                                 <SummaryCard
                                     title="Total Material Length"
                                     value={`${(result.combinedSummary.totalMaterial / 304.8).toFixed(1)} ft`}
@@ -262,13 +211,14 @@ export default function WorksheetReport({
                                 </section>
 
                                 {/* B. Material Optimization Categorized */}
-                                {["Frame", "Shutter", "Interlock", "Track Rail"].map(category => {
-                                    const categoryMaterials = secResult.materials.filter(m => m.component.includes(category));
+                                {(["frame", "shutter", "interlock", "trackRail", "mullion"] as const).map(category => {
+                                    const categoryMaterials = secResult.materials.filter(m => resolveMaterialCategory(m) === category);
                                     if (categoryMaterials.length === 0) return null;
+                                    const categoryLabel = MATERIAL_CATEGORY_LABELS[category];
 
                                     return (
                                         <section key={category} className="print:break-inside-avoid">
-                                            <h4 className="font-bold text-slate-700 mb-4 px-2 border-l-2 border-emerald-400 uppercase">{category} Cutting Details</h4>
+                                            <h4 className="font-bold text-slate-700 mb-4 px-2 border-l-2 border-emerald-400 uppercase">{categoryLabel} Cutting Details</h4>
 
                                             <div className="space-y-6">
                                                 {categoryMaterials.map((mat, mIdx) => {
@@ -288,7 +238,7 @@ export default function WorksheetReport({
                                                             {/* Cutting Plans Table */}
                                                             <div className="p-4 space-y-4">
                                                                 {aggregatedPlans.map((plan, pIdx) => (
-                                                                    <div key={pIdx} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center text-sm border-b border-slate-100 last:border-0 pb-4 last:pb-0">
+                                                                    <div key={pIdx} className="flex flex-col sm:flex-row print:flex-row gap-4 items-start sm:items-center print:items-center text-sm border-b border-slate-100 last:border-0 pb-4 last:pb-0">
 
                                                                         {/* Multiplier Badge */}
                                                                         <div className="shrink-0 w-16 text-center">

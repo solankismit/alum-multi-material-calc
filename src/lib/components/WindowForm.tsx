@@ -28,8 +28,30 @@ interface WindowFormProps {
   allSections?: SectionWithConfigs[];
 }
 
+const KERF_STORAGE_KEY = "alum_kerf_width_mm";
+const DEFAULT_KERF_WIDTH_MM = 3;
+
 export default function WindowForm({ onCalculate, onReset, initialValues, allSections }: WindowFormProps) {
   const [unitMode, setUnitMode] = useState<"mm" | "ft">("mm");
+
+  const [kerfWidthMm, setKerfWidthMm] = useState<number>(
+    initialValues?.kerfWidthMm ?? DEFAULT_KERF_WIDTH_MM
+  );
+
+  // Load the last-used kerf width from localStorage (only when not restoring a saved worksheet)
+  useEffect(() => {
+    if (initialValues?.kerfWidthMm !== undefined) return;
+    const stored = localStorage.getItem(KERF_STORAGE_KEY);
+    if (stored) {
+      const parsed = parseFloat(stored);
+      if (!isNaN(parsed) && parsed > 0) setKerfWidthMm(parsed);
+    }
+  }, [initialValues?.kerfWidthMm]);
+
+  const handleKerfChange = (value: number) => {
+    setKerfWidthMm(value);
+    localStorage.setItem(KERF_STORAGE_KEY, String(value));
+  };
 
   const defaultSectionTypeId = allSections && allSections.length > 0 ? allSections[0].id : undefined;
 
@@ -126,6 +148,20 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
     );
   };
 
+  // Openable panel count is a property of the whole Section, not of each
+  // individual dimension row — every row shares the same panel count so the
+  // section's diagram/panel count can never end up mixed (e.g. some rows at
+  // 1 panel, others at 2).
+  const updateSectionPanelCount = (sectionId: string, count: number | null) => {
+    setSections(
+      sections.map((s) =>
+        s.id === sectionId
+          ? { ...s, dimensions: s.dimensions.map((d) => ({ ...d, sections: count })) }
+          : s
+      )
+    );
+  };
+
   const removeDimension = (sectionId: string, dimensionId: string) => {
     setSections(
       sections.map((s) =>
@@ -182,7 +218,8 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
               );
 
               if (!hasEmptyDimension) {
-                // Add new empty dimension immediately
+                // Add new empty dimension immediately — inherits the
+                // section's shared panel count for openable systems.
                 return updatedSections.map((s) =>
                   s.id === sectionId
                     ? {
@@ -194,6 +231,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                           height: null,
                           width: null,
                           quantity: null,
+                          sections: s.dimensions[0]?.sections,
                         },
                       ],
                     }
@@ -276,7 +314,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
       }
     }
 
-    onCalculate({ sections: filteredSections });
+    onCalculate({ sections: filteredSections, kerfWidthMm });
   };
 
   const handleReset = () => {
@@ -309,27 +347,42 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
             Window Specifications
           </CardTitle>
 
-          <div className="flex items-center gap-3 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
-            <span className="text-xs font-semibold uppercase text-slate-500 px-2">Unit:</span>
-            <div className="flex gap-1">
-              <Button
-                type="button"
-                size="sm"
-                variant={unitMode === "mm" ? "primary" : "ghost"}
-                onClick={() => handleUnitToggle("mm")}
-                className={`h-8 px-4 ${unitMode === "mm" ? "bg-slate-800" : "text-slate-600 hover:text-slate-900"}`}
-              >
-                mm
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={unitMode === "ft" ? "primary" : "ghost"}
-                onClick={() => handleUnitToggle("ft")}
-                className={`h-8 px-4 ${unitMode === "ft" ? "bg-slate-800" : "text-slate-600 hover:text-slate-900"}`}
-              >
-                ft
-              </Button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
+              <Label className="text-xs font-semibold uppercase text-slate-500 px-1 mb-0">Kerf (mm):</Label>
+              <Input
+                type="number"
+                step="0.5"
+                min="0"
+                value={kerfWidthMm}
+                onChange={(e) => handleKerfChange(parseFloat(e.target.value) || 0)}
+                className="h-8 w-16 text-center px-1"
+                title="Saw blade kerf width — material lost per cut"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
+              <span className="text-xs font-semibold uppercase text-slate-500 px-2">Unit:</span>
+              <div className="flex gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={unitMode === "mm" ? "primary" : "ghost"}
+                  onClick={() => handleUnitToggle("mm")}
+                  className={`h-8 px-4 ${unitMode === "mm" ? "bg-slate-800" : "text-slate-600 hover:text-slate-900"}`}
+                >
+                  mm
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={unitMode === "ft" ? "primary" : "ghost"}
+                  onClick={() => handleUnitToggle("ft")}
+                  className={`h-8 px-4 ${unitMode === "ft" ? "bg-slate-800" : "text-slate-600 hover:text-slate-900"}`}
+                >
+                  ft
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -343,6 +396,9 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
             const has2Track = availableConfigs.some((c: any) => c.trackType === "2-track");
             const has3Track = availableConfigs.some((c: any) => c.trackType === "3-track");
             const isSystemOpenable = selectedSystem?.systemType === "openable";
+            // Panel count is shared by every dimension row in the section —
+            // read from the first row as the section's single source of truth.
+            const sectionPanelCount = section.dimensions[0]?.sections ?? null;
 
             const isAllGlassValid = availableConfigs.some((c: any) => c.trackType === section.trackType && c.configuration === "all-glass") || isSystemOpenable;
             const isGlassMosquitoValid = availableConfigs.some((c: any) => c.trackType === section.trackType && c.configuration === "glass-mosquito") || isSystemOpenable;
@@ -533,6 +589,29 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                         </label>
                       </div>
                     )}
+
+                    {isSystemOpenable && (
+                      <div className="space-y-2">
+                        <Label className="text-slate-600 font-medium">Number of Panels</Label>
+                        <p className="text-xs text-slate-400 -mt-1">Applies to every dimension row in this section.</p>
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder="e.g. 2"
+                          value={sectionPanelCount === null || sectionPanelCount === undefined ? "" : sectionPanelCount}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "") {
+                              updateSectionPanelCount(section.id, null);
+                              return;
+                            }
+                            const num = Number(value);
+                            if (!isNaN(num)) updateSectionPanelCount(section.id, num);
+                          }}
+                          className="max-w-[120px]"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-col space-y-3">
@@ -541,7 +620,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                       <WindowSchematic
                         trackType={isSystemOpenable ? "openable" : section.trackType}
                         configuration={section.configuration}
-                        sections={isSystemOpenable && section.dimensions[0] ? (section.dimensions[0].sections || 2) : undefined}
+                        sections={isSystemOpenable ? (sectionPanelCount || 2) : undefined}
                         className="max-h-[220px] shadow-sm"
                       />
                     </div>
@@ -556,7 +635,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                         key={dimension.id}
                         className="grid grid-cols-12 gap-2 sm:gap-3 items-start animate-in fade-in slide-in-from-top-1 duration-200"
                       >
-                        <div className={isSystemOpenable ? "col-span-3" : "col-span-4"}>
+                        <div className="col-span-4">
                           <Input
                             label={idx === 0 ? `Height (${unitMode})` : undefined}
                             type="number"
@@ -653,7 +732,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                           />
                         </div>
 
-                        <div className={isSystemOpenable ? "col-span-3" : "col-span-4"}>
+                        <div className="col-span-4">
                           <Input
                             label={idx === 0 ? `Width (${unitMode})` : undefined}
                             type="number"
@@ -746,29 +825,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                           />
                         </div>
 
-                        {isSystemOpenable && (
-                          <div className="col-span-3">
-                            <Input
-                              label={idx === 0 ? "Panels" : undefined}
-                              type="number"
-                              min="1"
-                              placeholder="Sections"
-                              value={dimension.sections === null || dimension.sections === undefined ? "" : dimension.sections}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                if (value === "") {
-                                  updateDimension(section.id, dimension.id, { sections: null });
-                                  return;
-                                }
-                                const num = Number(value);
-                                if (!isNaN(num)) updateDimension(section.id, dimension.id, { sections: num });
-                              }}
-                              className="text-center"
-                            />
-                          </div>
-                        )}
-
-                        <div className={`${isSystemOpenable ? "col-span-3" : "col-span-4"} flex items-end gap-1`}>
+                        <div className="col-span-4 flex items-end gap-1">
                           <div className="flex-1">
                             <Input
                               label={idx === 0 ? "Qty" : undefined}

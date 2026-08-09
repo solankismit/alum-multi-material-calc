@@ -9,10 +9,13 @@ import { Label } from "@/components/ui/Label";
 interface ProfileFormProps {
     initialName: string;
     initialCompany: string;
+    initialBusinessAddress?: string;
+    initialBusinessPhone?: string;
+    initialGstNumber?: string;
     email: string;
 }
 
-export function ProfileForm({ initialName, initialCompany, email }: ProfileFormProps) {
+export function ProfileForm({ initialName, initialCompany, initialBusinessAddress, initialBusinessPhone, initialGstNumber, email }: ProfileFormProps) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -25,12 +28,15 @@ export function ProfileForm({ initialName, initialCompany, email }: ProfileFormP
         const formData = new FormData(e.currentTarget);
         const name = formData.get("name") as string;
         const company = formData.get("company") as string;
+        const businessAddress = formData.get("businessAddress") as string;
+        const businessPhone = formData.get("businessPhone") as string;
+        const gstNumber = formData.get("gstNumber") as string;
 
         try {
             const res = await fetch("/api/user/profile", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, company }),
+                body: JSON.stringify({ name, company, businessAddress, businessPhone, gstNumber }),
             });
 
             if (!res.ok) throw new Error("Failed to update profile");
@@ -68,6 +74,36 @@ export function ProfileForm({ initialName, initialCompany, email }: ProfileFormP
                     name="company"
                     defaultValue={initialCompany}
                     placeholder="Enter company name"
+                />
+            </div>
+
+            <div className="space-y-2">
+                <Label htmlFor="businessAddress">Business Address</Label>
+                <Input
+                    id="businessAddress"
+                    name="businessAddress"
+                    defaultValue={initialBusinessAddress}
+                    placeholder="Shown on the quotation letterhead"
+                />
+            </div>
+
+            <div className="space-y-2">
+                <Label htmlFor="businessPhone">Business Phone</Label>
+                <Input
+                    id="businessPhone"
+                    name="businessPhone"
+                    defaultValue={initialBusinessPhone}
+                    placeholder="Shown on the quotation letterhead"
+                />
+            </div>
+
+            <div className="space-y-2">
+                <Label htmlFor="gstNumber">GST Number</Label>
+                <Input
+                    id="gstNumber"
+                    name="gstNumber"
+                    defaultValue={initialGstNumber}
+                    placeholder="Optional"
                 />
             </div>
 

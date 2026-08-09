@@ -7,13 +7,22 @@ interface WindowSchematicProps {
     configuration: "all-glass" | "glass-mosquito" | string;
     sections?: number;
     className?: string;
+    /** When provided, draws a dimension line + "<value> mm" label above the frame. */
+    widthMm?: number;
+    /** When provided, draws a dimension line + "<value> mm" label to the left of the frame. */
+    heightMm?: number;
 }
 
-export default function WindowSchematic({ trackType, configuration, sections = 2, className = "" }: WindowSchematicProps) {
-    // Canvas Logic
+export default function WindowSchematic({ trackType, configuration, sections = 2, className = "", widthMm, heightMm }: WindowSchematicProps) {
+    // Canvas Logic — frame/panel drawing below is unchanged; it's wrapped in a
+    // translated <g> so a gutter can be reserved for dimension lines without
+    // touching any of this layout math.
     const width = 400;
     const height = 300;
     const padding = 20;
+    const dimGutter = 34;
+    const canvasW = width + dimGutter;
+    const canvasH = height + dimGutter;
 
     // Frame Dimensions
     const frameW = width - (padding * 2);
@@ -72,7 +81,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
     const trackHeight = frameH / numTracks;
 
     return (
-        <svg viewBox={`0 0 ${width} ${height}`} className={`w-full h-auto bg-slate-50 border border-slate-200 rounded ${className}`}>
+        <svg viewBox={`0 0 ${canvasW} ${canvasH}`} className={`w-full h-auto bg-slate-50 border border-slate-200 rounded ${className}`}>
             {/* Definitions for patterns */}
             <defs>
                 <pattern id="diagonalHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
@@ -88,6 +97,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                 </linearGradient>
             </defs>
 
+            <g transform={`translate(${dimGutter}, ${dimGutter})`}>
             {/* Main Outer Frame */}
             <rect
                 x={padding}
@@ -235,11 +245,39 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                     </g>
                 );
             })}
+            </g>
 
-            {/* Dimensions Label (Placeholders) */}
-            <text x={width / 2} y={height + 15} textAnchor="middle" fontSize="12" fill="#64748b">Width</text>
-            <text x={10} y={height / 2} textAnchor="middle" writingMode="tb" fontSize="12" fill="#64748b">Height</text>
+            {/* Width dimension line — reserved top gutter */}
+            {widthMm !== undefined && widthMm > 0 && (
+                <g>
+                    <line x1={dimGutter + padding} y1={dimGutter - 8} x2={dimGutter + width - padding} y2={dimGutter - 8} stroke="#334155" strokeWidth="1" />
+                    <line x1={dimGutter + padding} y1={dimGutter - 12} x2={dimGutter + padding} y2={dimGutter - 4} stroke="#334155" strokeWidth="1" />
+                    <line x1={dimGutter + width - padding} y1={dimGutter - 12} x2={dimGutter + width - padding} y2={dimGutter - 4} stroke="#334155" strokeWidth="1" />
+                    <text x={dimGutter + width / 2} y={dimGutter - 16} textAnchor="middle" fontSize="11" fill="#334155" fontWeight="600">
+                        {Math.round(widthMm)} mm
+                    </text>
+                </g>
+            )}
 
+            {/* Height dimension line — reserved left gutter */}
+            {heightMm !== undefined && heightMm > 0 && (
+                <g>
+                    <line x1={dimGutter - 8} y1={dimGutter + padding} x2={dimGutter - 8} y2={dimGutter + height - padding} stroke="#334155" strokeWidth="1" />
+                    <line x1={dimGutter - 12} y1={dimGutter + padding} x2={dimGutter - 4} y2={dimGutter + padding} stroke="#334155" strokeWidth="1" />
+                    <line x1={dimGutter - 12} y1={dimGutter + height - padding} x2={dimGutter - 4} y2={dimGutter + height - padding} stroke="#334155" strokeWidth="1" />
+                    <text
+                        x={16}
+                        y={dimGutter + height / 2}
+                        textAnchor="middle"
+                        fontSize="11"
+                        fill="#334155"
+                        fontWeight="600"
+                        transform={`rotate(-90 16 ${dimGutter + height / 2})`}
+                    >
+                        {Math.round(heightMm)} mm
+                    </text>
+                </g>
+            )}
         </svg>
     );
 }

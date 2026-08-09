@@ -227,7 +227,7 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
                             Back to Dashboard
                         </Button>
                     </Link>
-                    <ClientPrintButton />
+                    <ClientPrintButton label="Print Orderbook" />
                 </div>
 
                 {/* Report Content */}

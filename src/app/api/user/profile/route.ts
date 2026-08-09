@@ -6,6 +6,9 @@ import { z } from "zod";
 const profileSchema = z.object({
     name: z.string().optional(),
     company: z.string().optional(),
+    businessAddress: z.string().optional(),
+    businessPhone: z.string().optional(),
+    gstNumber: z.string().optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -27,6 +30,9 @@ export async function PATCH(req: NextRequest) {
             data: {
                 name: result.data.name,
                 company: result.data.company,
+                businessAddress: result.data.businessAddress,
+                businessPhone: result.data.businessPhone,
+                gstNumber: result.data.gstNumber,
             },
         });
 

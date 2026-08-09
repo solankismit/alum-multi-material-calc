@@ -10,9 +10,21 @@ export interface QuotationInput {
     clientName: string;
     clientPhone?: string;
     clientAddress?: string;
-    quotationNumber: string;
+    deliveryAddress?: string;
+    customerRef?: string;
     pricingData: unknown; // JSON structure for rates
     totalAmount: number;
+}
+
+/** Atomically reserves the next sequential quotation number for this user. */
+async function nextQuotationNumber(userId: string): Promise<string> {
+    const user = await db.user.update({
+        where: { id: userId },
+        data: { quotationSeq: { increment: 1 } },
+        select: { quotationSeq: true },
+    });
+    const year = new Date().getFullYear();
+    return `Q-${year}-${String(user.quotationSeq).padStart(4, "0")}`;
 }
 
 export async function createQuotation(input: QuotationInput) {
@@ -33,6 +45,8 @@ export async function createQuotation(input: QuotationInput) {
             }
         }
 
+        const quotationNumber = await nextQuotationNumber(userId);
+
         const quotation = await db.quotation.create({
             data: {
                 userId,
@@ -40,17 +54,58 @@ export async function createQuotation(input: QuotationInput) {
                 clientName: input.clientName,
                 clientPhone: input.clientPhone,
                 clientAddress: input.clientAddress,
-                quotationNumber: input.quotationNumber,
+                deliveryAddress: input.deliveryAddress,
+                customerRef: input.customerRef,
+                quotationNumber,
                 pricingData: input.pricingData as never,
                 totalAmount: input.totalAmount,
             },
         });
 
         revalidatePath("/quotations");
-        return { success: true, id: quotation.id };
+        return { success: true, id: quotation.id, quotationNumber };
     } catch (error) {
         console.error("Create Quotation Error:", error);
         return { success: false, error: "Failed to create quotation" };
+    }
+}
+
+export async function duplicateQuotation(id: string) {
+    try {
+        const session = await verifySession();
+        if (!session?.userId) {
+            return { success: false, error: "Unauthorized" };
+        }
+        const userId = session.userId as string;
+
+        const source = await db.quotation.findUnique({ where: { id } });
+        if (!source || source.userId !== userId) {
+            return { success: false, error: "Not found or access denied" };
+        }
+
+        const quotationNumber = await nextQuotationNumber(userId);
+
+        const copy = await db.quotation.create({
+            data: {
+                userId,
+                worksheetId: source.worksheetId,
+                clientName: source.clientName,
+                clientPhone: source.clientPhone,
+                clientAddress: source.clientAddress,
+                deliveryAddress: source.deliveryAddress,
+                customerRef: source.customerRef,
+                quotationNumber,
+                status: "DRAFT",
+                pricingData: source.pricingData as never,
+                totalAmount: source.totalAmount,
+            },
+        });
+
+        revalidatePath("/quotations");
+        return { success: true, id: copy.id };
+    } catch (error) {
+        console.error("Duplicate Quotation Error:", error);
+        return { success: false, error: "Failed to duplicate quotation" };
     }
 }
 
@@ -65,7 +120,7 @@ export async function getQuotation(id: string) {
             where: { id },
             include: {
                 worksheet: true,
-                user: { select: { company: true, businessAddress: true, businessPhone: true, name: true } },
+                user: { select: { company: true, businessAddress: true, businessPhone: true, gstNumber: true, name: true } },
             },
         });
 

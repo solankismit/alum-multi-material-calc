@@ -46,7 +46,15 @@ export default function QuotationStatusActions({ id, status }: { id: string; sta
                     <Button size="sm" variant="outline" className="border-red-300 text-red-700" disabled={isPending} onClick={() => handleChange("REJECTED")}>
                         Mark Rejected
                     </Button>
+                    <Button size="sm" variant="ghost" disabled={isPending} onClick={() => handleChange("DRAFT")}>
+                        Revise (back to Draft)
+                    </Button>
                 </>
+            )}
+            {(status === "ACCEPTED" || status === "REJECTED") && (
+                <Button size="sm" variant="ghost" disabled={isPending} onClick={() => handleChange("DRAFT")}>
+                    Revise (back to Draft)
+                </Button>
             )}
             {error && <span className="text-xs text-red-600">{error}</span>}
         </div>

@@ -1,4 +1,5 @@
 import type { MaterialRequirement, StockBreakdown } from "../types";
+import { resolveMaterialCategory } from "./materialCategory";
 
 export interface MaterialSummary {
   totalMaterial: number;
@@ -50,13 +51,8 @@ type ComponentCategory =
   | "mullion"
   | "other";
 
-function classifyComponent(componentName: string): ComponentCategory {
-  if (componentName.includes("Frame")) return "frame";
-  if (componentName.includes("Shutter")) return "shutter";
-  if (componentName.includes("Interlock")) return "interlock";
-  if (componentName.includes("Track Rail")) return "trackRail";
-  if (componentName.includes("Mullion")) return "mullion";
-  return "other";
+function classifyComponent(mat: MaterialRequirement): ComponentCategory {
+  return resolveMaterialCategory(mat);
 }
 
 // ─── Stock summary ────────────────────────────────────────────────────────────
@@ -94,7 +90,7 @@ function calculateStockSummary(materials: MaterialRequirement[]): {
   };
 
   materials.forEach((m) => {
-    const category = classifyComponent(m.component);
+    const category = classifyComponent(m);
     const categoryDict = categoryMap[category];
 
     if (m.stockBreakdown.allStockCounts) {
@@ -162,7 +158,7 @@ function calculateWastagePiecesSummary(materials: MaterialRequirement[]): {
 
   materials.forEach((m) => {
     if (!m.stockBreakdown.cuttingPlans) return;
-    const category = classifyComponent(m.component);
+    const category = classifyComponent(m);
     const categoryDict = categoryMap[category];
 
     const wastageByStock: { [stockName: string]: number } = {};

@@ -30,6 +30,8 @@ model User {
   logoUrl         String?
   businessAddress String?
   businessPhone   String?
+  gstNumber       String?
+  quotationSeq    Int      @default(0) // atomically incremented to assign sequential quotation numbers
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -123,9 +125,11 @@ model Quotation {
   quotationNumber String?
   status          QuotationStatus @default(DRAFT)
 
-  clientName    String?
-  clientPhone   String?
-  clientAddress String?
+  clientName      String?
+  clientPhone     String?
+  clientAddress   String?
+  deliveryAddress String? // defaults to clientAddress in the UI when left blank
+  customerRef     String?
 
   pricingData Json
 
@@ -142,7 +146,10 @@ model RateCard {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  profileRatePerFt Float @default(0) // ₹ per ft, applied to all aluminium members
+  profileRatePerFt Float @default(0) // ₹ per ft — default/fallback rate for any category without an override
+
+  // { "frame"|"shutter"|"interlock"|"trackRail"|"mullion": ratePerFt } — per-category overrides
+  profileRates Json @default("{}")
 
   // { "<glass type/thickness label>": ratePerSqft }
   glassRates Json @default("{}")
@@ -150,10 +157,16 @@ model RateCard {
   // { "<hardware/accessory name>": unitRate }
   hardwareRates Json @default("{}")
 
-  laborDefault        Float @default(0)
+  laborMode        String @default("flat") // "flat" | "percentOfMaterial" | "perSqft"
+  laborDefault     Float  @default(0) // ₹ flat amount, used when laborMode = "flat"
+  laborPercent     Float  @default(0) // percent of material cost, used when laborMode = "percentOfMaterial"
+  laborRatePerSqft Float  @default(0) // ₹ per sq.ft of total area, used when laborMode = "perSqft"
+
   overheadDefault     Float @default(0)
   profitMarginDefault Float @default(0) // percent
   taxRateDefault      Float @default(0) // percent
+
+  termsText String @default("Payment terms: 50% advance, balance upon completion.\nValid for 30 days from date of issue.")
 
   updatedAt DateTime @updatedAt
 }

@@ -12,7 +12,8 @@ import {
  */
 export function calculateMaterials(
   input: WindowInput,
-  allSections: SectionWithConfigs[]
+  allSections: SectionWithConfigs[],
+  kerfWidthMm?: number
 ): CalculationResult {
   const sectionResults: SectionResult[] = [];
 
@@ -43,7 +44,8 @@ export function calculateMaterials(
         hasTrackRail: section.hasTrackRail,
       },
       { ...sectionConfigData, systemType: sectionTypeData?.systemType },
-      section.stockMap
+      section.stockMap,
+      kerfWidthMm ?? input.kerfWidthMm
     );
 
     const summary = calculateSectionSummary(materialsResult.materials);

@@ -10,8 +10,9 @@ export const STOCK_OPTIONS: StockOption[] = [
  * Kerf width in mm — material consumed by each aluminium saw cut.
  * Each cut between pieces wastes this amount of stock.
  * Standard aluminium profile saws waste ~2–3 mm per cut.
+ * Used as the fallback whenever a caller doesn't pass an explicit kerf.
  */
-export const KERF_WIDTH_MM = 3;
+export const DEFAULT_KERF_WIDTH_MM = 3;
 
 export interface PieceRequirement {
   length: number;
@@ -36,7 +37,8 @@ export interface CombinedStockBreakdown extends StockBreakdown {
 export function optimizeStockUsage(
   requiredLength: number,
   totalPieces: number,
-  stockOptions: StockOption[] = STOCK_OPTIONS
+  stockOptions: StockOption[] = STOCK_OPTIONS,
+  kerfWidthMm: number = DEFAULT_KERF_WIDTH_MM
 ): StockBreakdown {
   let bestOption: StockBreakdown | null = null;
   let minWastagePercent = Infinity;
@@ -44,7 +46,7 @@ export function optimizeStockUsage(
   for (const stock of stockOptions) {
     // With kerf: N pieces fit when N*(L + K) - K ≤ S  →  N ≤ (S + K) / (L + K)
     const piecesPerStock = Math.floor(
-      (stock.length + KERF_WIDTH_MM) / (requiredLength + KERF_WIDTH_MM)
+      (stock.length + kerfWidthMm) / (requiredLength + kerfWidthMm)
     );
     if (piecesPerStock === 0) continue;
 
@@ -60,7 +62,7 @@ export function optimizeStockUsage(
       const pieces: number[] = Array(piecesFromThisStock).fill(requiredLength);
       // Kerf applies between pieces (N pieces = N-1 cuts)
       const kerfInThisStock =
-        piecesFromThisStock > 1 ? (piecesFromThisStock - 1) * KERF_WIDTH_MM : 0;
+        piecesFromThisStock > 1 ? (piecesFromThisStock - 1) * kerfWidthMm : 0;
       const stockWastage =
         stock.length - piecesFromThisStock * requiredLength - kerfInThisStock;
       cuttingPlans.push({ stockIndex: i + 1, pieces, wastage: stockWastage });
@@ -128,7 +130,8 @@ export function optimizeStockUsage(
  */
 export function packStock(
   stock: StockOption,
-  remainingPieces: PieceRequirement[]
+  remainingPieces: PieceRequirement[],
+  kerfWidthMm: number = DEFAULT_KERF_WIDTH_MM
 ): {
   pieces: { length: number; type: string }[];
   wastage: number;
@@ -144,8 +147,8 @@ export function packStock(
 
   for (const req of sortedPieces) {
     while (req.count > 0) {
-      // First piece has no preceding kerf; every subsequent cut adds KERF_WIDTH_MM
-      const kerfCost = pieces.length > 0 ? KERF_WIDTH_MM : 0;
+      // First piece has no preceding kerf; every subsequent cut adds kerfWidthMm
+      const kerfCost = pieces.length > 0 ? kerfWidthMm : 0;
       if (usedLength + kerfCost + req.length > stock.length) break;
       usedLength += kerfCost + req.length;
       pieces.push({ length: req.length, type: req.type });
@@ -171,7 +174,8 @@ export function packStock(
  */
 function runGreedyPack(
   pieceRequirements: PieceRequirement[],
-  availableStocks: StockOption[]
+  availableStocks: StockOption[],
+  kerfWidthMm: number = DEFAULT_KERF_WIDTH_MM
 ): {
   stockCounts: { [stockName: string]: number };
   cuttingPlans: CuttingPlan[];
@@ -197,7 +201,7 @@ function runGreedyPack(
     let bestWastagePercent = Infinity;
 
     for (const stock of availableStocks) {
-      const packed = packStock(stock, remainingPieces);
+      const packed = packStock(stock, remainingPieces, kerfWidthMm);
       if (packed.pieces.length > 0) {
         // Compare wastage as a fraction of bar length, not absolute mm
         const wastagePercent = packed.wastage / stock.length;
@@ -264,7 +268,8 @@ function runGreedyPack(
  */
 export function optimizeCombinedStockUsage(
   pieceRequirements: PieceRequirement[],
-  stockOptions: StockOption[] = STOCK_OPTIONS
+  stockOptions: StockOption[] = STOCK_OPTIONS,
+  kerfWidthMm: number = DEFAULT_KERF_WIDTH_MM
 ): CombinedStockBreakdown {
   const currentStockOptions =
     stockOptions.length > 0 ? stockOptions : STOCK_OPTIONS;
@@ -294,11 +299,11 @@ export function optimizeCombinedStockUsage(
 
   // Strategy A: each stock size used exclusively
   for (const stock of currentStockOptions) {
-    tryAndKeepBest(runGreedyPack(pieceRequirements, [stock]));
+    tryAndKeepBest(runGreedyPack(pieceRequirements, [stock], kerfWidthMm));
   }
 
   // Strategy B: mixed-stock greedy (best wastage % per iteration)
-  tryAndKeepBest(runGreedyPack(pieceRequirements, currentStockOptions));
+  tryAndKeepBest(runGreedyPack(pieceRequirements, currentStockOptions, kerfWidthMm));
 
   // Fallback: piece(s) exceed every available stock — one piece per bar
   if (!bestSolution) {

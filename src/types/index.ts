@@ -26,6 +26,8 @@ export interface WindowSection {
 
 export interface WindowInput {
   sections: WindowSection[];
+  /** Saw kerf width in mm used for this calculation — persisted so a saved worksheet stays reproducible. */
+  kerfWidthMm?: number;
 }
 
 export interface StockOption {
@@ -69,8 +71,16 @@ export interface StockBreakdown {
   };
 }
 
+export type MaterialCategory =
+  | "frame"
+  | "shutter"
+  | "interlock"
+  | "trackRail"
+  | "mullion";
+
 export interface MaterialRequirement {
   component: string;
+  category: MaterialCategory;
   totalRequired: number;
   stockBreakdown: StockBreakdown;
   description?: string;

@@ -11,7 +11,7 @@ export default async function SettingsPage() {
     const session = await verifySession();
     const user = await db.user.findUnique({
         where: { id: session.userId },
-        select: { name: true, email: true, company: true },
+        select: { name: true, email: true, company: true, businessAddress: true, businessPhone: true, gstNumber: true },
     });
 
     if (!user) return redirect("/login");
@@ -30,6 +30,9 @@ export default async function SettingsPage() {
                         <ProfileForm
                             initialName={user.name || ""}
                             initialCompany={user.company || ""}
+                            initialBusinessAddress={user.businessAddress || ""}
+                            initialBusinessPhone={user.businessPhone || ""}
+                            initialGstNumber={user.gstNumber || ""}
                             email={user.email}
                         />
                     </CardContent>
