@@ -9,55 +9,21 @@ import QuotationHeaderActions from "./QuotationHeaderActions";
 import QuotationStatusActions from "./QuotationStatusActions";
 import WindowSchematic from "@/components/WindowSchematic";
 import PrintStyles from "@/components/PrintStyles";
+import { Eye, EyeOff } from "lucide-react";
+import { splitTax, DEFAULT_TAX_TYPE, type PricingData } from "@/utils/quotationPricing";
 import type { WindowInput } from "@/types";
 
 interface PageProps {
     params: Promise<{ id: string }>;
-}
-
-interface LineItem {
-    name: string;
-    quantity?: number;
-    area?: number;
-    unit: string;
-    rate: number;
-    cost: number;
-}
-
-interface SectionPricing {
-    sectionId: string;
-    sectionName: string;
-    sectionTypeName?: string;
-    trackType: string;
-    configuration: string;
-    panels: number;
-    qty: number;
-    areaSqFt: number;
-    widthMm?: number;
-    heightMm?: number;
-    profiles: LineItem[];
-    glass: LineItem[];
-    accessories: LineItem[];
-    subtotal: number;
-}
-
-interface QuotationPricing {
-    sections?: SectionPricing[];
-    profiles: LineItem[];
-    glass: LineItem[];
-    accessories: LineItem[];
-    labor?: number;
-    overhead?: number;
-    discount?: { type: "percent" | "flat"; value: number; amount: number };
-    profitMargin?: number;
-    taxRate?: number;
-    termsText?: string;
+    searchParams: Promise<{ view?: string }>;
 }
 
 const DEFAULT_TERMS = "Payment terms: 50% advance, balance upon completion.\nValid for 30 days from date of issue.";
 
-export default async function QuotationView({ params }: PageProps) {
+export default async function QuotationView({ params, searchParams }: PageProps) {
     const { id } = await params;
+    const { view } = await searchParams;
+    const isInternal = view === "internal";
     const res = await getQuotation(id);
 
     if (!res.success || !res.data) {
@@ -72,7 +38,8 @@ export default async function QuotationView({ params }: PageProps) {
     }
 
     const quote = res.data;
-    const pricing = quote.pricingData as unknown as QuotationPricing;
+    const pricing = quote.pricingData as unknown as PricingData;
+    const taxType = pricing.taxType ?? DEFAULT_TAX_TYPE;
 
     // Quotations saved after the per-section pricing change carry `pricing.sections`
     // (one cost breakdown per window type). Older / freeform quotations keep the
@@ -93,13 +60,24 @@ export default async function QuotationView({ params }: PageProps) {
         glassTotal = pricing.glass.reduce((acc, curr) => acc + curr.cost, 0);
         accessoriesTotal = pricing.accessories.reduce((acc, curr) => acc + curr.cost, 0);
     }
-    const subTotal = profilesTotal + glassTotal + accessoriesTotal + (pricing.labor || 0) + (pricing.overhead || 0);
+    const materialCost = profilesTotal + glassTotal + accessoriesTotal;
+
+    // Installation/transportation amounts only count toward the subtotal when
+    // explicitly marked included — same rule as `computeTotals` in
+    // quotationPricing.ts. Discount is trusted from the persisted `amount`
+    // (set once at save time) rather than recomputed from `value`, since a
+    // percent discount's amount depends on the subtotal at save time.
+    const installationAmount = pricing.installation?.included ? (pricing.installation.amount || 0) : 0;
+    const transportationAmount = pricing.transportation?.included ? (pricing.transportation.amount || 0) : 0;
+    const subTotal = materialCost + (pricing.labor || 0) + (pricing.overhead || 0) + installationAmount + transportationAmount;
     const discountAmount = pricing.discount?.amount || 0;
     const discountedSubtotal = Math.max(0, subTotal - discountAmount);
     const profitMargin = pricing.profitMargin || 0;
     const taxRate = pricing.taxRate || 0;
     const profitAmount = discountedSubtotal * (profitMargin / 100);
     const taxAmount = (discountedSubtotal + profitAmount) * (taxRate / 100);
+    const taxSplit = splitTax(taxAmount, taxType);
+    const finalTotal = discountedSubtotal + profitAmount + taxAmount;
 
     const business = {
         name: quote.user?.company || quote.user?.name || "Your Company",
@@ -135,10 +113,16 @@ export default async function QuotationView({ params }: PageProps) {
         };
     });
 
+    const showLaborRow = (pricing.labor ?? 0) > 0;
+    const showOverheadRow = isInternal && (pricing.overhead ?? 0) > 0;
+    const showInstallationRow = !!pricing.installation;
+    const showTransportationRow = !!pricing.transportation;
+    const showExtraCostsRow = showLaborRow || showOverheadRow || showInstallationRow || showTransportationRow;
+
     return (
         <div className="min-h-screen bg-surface-muted p-8 print:p-0 print:bg-white">
             <PrintStyles />
-            <div className="max-w-4xl mx-auto print:hidden mb-3">
+            <div className="max-w-4xl mx-auto print:hidden mb-3 flex items-center justify-between">
                 <Breadcrumbs
                     items={[
                         { label: "Dashboard", href: "/dashboard" },
@@ -146,6 +130,13 @@ export default async function QuotationView({ params }: PageProps) {
                         { label: quote.quotationNumber || "Quotation" },
                     ]}
                 />
+                <Link
+                    href={isInternal ? `/quotations/${quote.id}` : `/quotations/${quote.id}?view=internal`}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 border border-slate-200 rounded-md px-2.5 py-1.5"
+                >
+                    {isInternal ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    {isInternal ? "Viewing Internal Cost Sheet — switch to Customer View" : "View Internal Cost Sheet"}
+                </Link>
             </div>
             <div className="max-w-4xl mx-auto bg-surface shadow-lg print:shadow-none p-8 md:p-12 print:p-0 text-sm print:text-[11px]" id="printable-area">
 
@@ -157,6 +148,12 @@ export default async function QuotationView({ params }: PageProps) {
                         <ClientPrintButton label="Print / Save PDF" />
                     </div>
                 </div>
+
+                {isInternal && (
+                    <div className="print:hidden mb-6 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium rounded-lg px-3 py-2">
+                        Internal Cost Sheet — includes profit margin and itemized costs. Do not send this version to the customer.
+                    </div>
+                )}
 
                 {/* Invoice Header */}
                 <div className="flex justify-between items-start border-b-2 border-slate-800 pb-8 mb-6 print:pb-2 print:mb-3 print:break-inside-avoid">
@@ -224,6 +221,10 @@ export default async function QuotationView({ params }: PageProps) {
                             <tbody className="divide-y divide-slate-100">
                                 {pricing.sections!.map((section) => {
                                     const effectiveRate = section.areaSqFt > 0 ? section.subtotal / section.areaSqFt : 0;
+                                    const allLines = [...section.profiles, ...section.glass, ...section.accessories];
+                                    const includedLines = allLines.filter((line) => line.cost > 0 || line.quantity || line.area);
+                                    const glassLine = section.glass[0];
+                                    const meshLine = section.accessories.find((a) => a.area);
                                     return (
                                         <tr key={section.sectionId} className="align-top print:break-inside-avoid">
                                             <td className="p-2 print:p-1 w-44">
@@ -242,17 +243,30 @@ export default async function QuotationView({ params }: PageProps) {
                                                     {section.sectionName}{section.qty > 1 ? ` × ${section.qty}` : ""}
                                                 </div>
                                                 <div className="text-slate-500 text-xs print:text-[10px]">
-                                                    {section.sectionTypeName ? `${section.sectionTypeName} — ` : ""}
+                                                    {section.configLabel ? `${section.configLabel} — ` : (section.sectionTypeName ? `${section.sectionTypeName} — ` : "")}
                                                     {((section.widthMm ?? 0) > 0 || (section.heightMm ?? 0) > 0) && `${Math.round(section.widthMm || 0)} × ${Math.round(section.heightMm || 0)} mm — `}
                                                     {section.areaSqFt.toFixed(2)} sq.ft
+                                                    {isInternal && typeof section.materialWastagePercent === "number" && ` — ${section.materialWastagePercent.toFixed(1)}% wastage`}
                                                 </div>
-                                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-slate-500 text-xs print:text-[10px] mt-1">
-                                                    {[...section.profiles, ...section.glass, ...section.accessories]
-                                                        .filter((line) => line.cost > 0)
-                                                        .map((line, idx) => (
+                                                {isInternal ? (
+                                                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-slate-500 text-xs print:text-[10px] mt-1">
+                                                        {allLines.filter((line) => line.cost > 0).map((line, idx) => (
                                                             <span key={idx} className="whitespace-nowrap">{line.name}: {formatCurrency(line.cost)}</span>
                                                         ))}
-                                                </div>
+                                                    </div>
+                                                ) : (
+                                                    includedLines.length > 0 && (
+                                                        <div className="text-slate-500 text-xs print:text-[10px] mt-1">
+                                                            Includes: {includedLines.map((line) => line.name).join(", ")}
+                                                        </div>
+                                                    )
+                                                )}
+                                                {isInternal && (glassLine?.widthMm || meshLine?.area) && (
+                                                    <div className="text-slate-400 text-[10px] mt-0.5">
+                                                        {glassLine?.widthMm ? `Glass pane: ${Math.round(glassLine.widthMm)} × ${Math.round(glassLine.heightMm || 0)} mm — ` : ""}
+                                                        {meshLine?.area ? `Mesh: ${meshLine.area.toFixed(2)} sq.ft` : ""}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="p-2 print:p-1 text-right text-slate-400 text-xs print:text-[10px] whitespace-nowrap">
                                                 {effectiveRate > 0 ? `${formatCurrency(effectiveRate)}/sq.ft` : "—"}
@@ -263,13 +277,6 @@ export default async function QuotationView({ params }: PageProps) {
                                 })}
                             </tbody>
                         </table>
-
-                        {((pricing.labor ?? 0) > 0 || (pricing.overhead ?? 0) > 0) && (
-                            <div className="flex justify-end gap-8 print:gap-4 text-sm print:text-xs text-slate-600 p-2 print:p-1 border-t border-slate-100">
-                                {(pricing.labor ?? 0) > 0 && <span>Labor: {formatCurrency(pricing.labor || 0)}</span>}
-                                {(pricing.overhead ?? 0) > 0 && <span>Overhead: {formatCurrency(pricing.overhead || 0)}</span>}
-                            </div>
-                        )}
                     </div>
                 ) : (
                     <>
@@ -337,26 +344,39 @@ export default async function QuotationView({ params }: PageProps) {
                                         <td className="py-3 print:py-1 text-right font-medium">{formatCurrency(a.cost)}</td>
                                     </tr>
                                 ))}
-
-                                {(pricing.labor ?? 0) > 0 && (
-                                    <tr>
-                                        <td className="py-3 print:py-1">Labor Charges</td>
-                                        <td className="py-3 print:py-1 text-right">-</td>
-                                        <td className="py-3 print:py-1 text-right">-</td>
-                                        <td className="py-3 print:py-1 text-right font-medium">{formatCurrency(pricing.labor || 0)}</td>
-                                    </tr>
-                                )}
-                                {(pricing.overhead ?? 0) > 0 && (
-                                    <tr>
-                                        <td className="py-3 print:py-1">Overhead / Misc</td>
-                                        <td className="py-3 print:py-1 text-right">-</td>
-                                        <td className="py-3 print:py-1 text-right">-</td>
-                                        <td className="py-3 print:py-1 text-right font-medium">{formatCurrency(pricing.overhead || 0)}</td>
-                                    </tr>
-                                )}
                             </tbody>
                         </table>
                     </>
+                )}
+
+                {showExtraCostsRow && (
+                    <div className="flex flex-wrap justify-end gap-x-8 gap-y-1 text-sm print:text-xs text-slate-600 -mt-6 mb-8 print:mb-3 print:-mt-2 pb-2 border-b border-slate-100">
+                        {showLaborRow && (
+                            <span>
+                                Labour: {formatCurrency(pricing.labor || 0)}
+                                {isInternal && pricing.laborBreakdown?.mode === "itemized" && pricing.laborBreakdown.items.length > 0 && (
+                                    <span className="text-slate-400"> ({pricing.laborBreakdown.items.map((i) => `${i.name}: ${formatCurrency(i.amount)}`).join(", ")})</span>
+                                )}
+                            </span>
+                        )}
+                        {showOverheadRow && <span>Overhead: {formatCurrency(pricing.overhead || 0)}</span>}
+                        {showInstallationRow && (
+                            <span>
+                                Installation: {pricing.installation!.included
+                                    ? (isInternal ? formatCurrency(pricing.installation!.amount) : "Included")
+                                    : "Not included"}
+                                {pricing.installation!.note ? ` — ${pricing.installation!.note}` : ""}
+                            </span>
+                        )}
+                        {showTransportationRow && (
+                            <span>
+                                Transportation: {pricing.transportation!.included
+                                    ? (isInternal ? formatCurrency(pricing.transportation!.amount) : "Included")
+                                    : "Not included"}
+                                {pricing.transportation!.note ? ` — ${pricing.transportation!.note}` : ""}
+                            </span>
+                        )}
+                    </div>
                 )}
 
                 {/* Totals */}
@@ -372,19 +392,32 @@ export default async function QuotationView({ params }: PageProps) {
                                 <span>- {formatCurrency(discountAmount)}</span>
                             </div>
                         )}
-                        {profitMargin > 0 && (
+                        {isInternal && profitMargin > 0 && (
                             <div className="flex justify-between text-emerald-600">
                                 <span>Profit ({profitMargin}%)</span>
                                 <span>{formatCurrency(profitAmount)}</span>
                             </div>
                         )}
-                        <div className="flex justify-between text-slate-600">
-                            <span>Tax ({taxRate}%)</span>
-                            <span>{formatCurrency(taxAmount)}</span>
-                        </div>
+                        {taxType === "IGST" ? (
+                            <div className="flex justify-between text-slate-600">
+                                <span>IGST ({taxRate}%)</span>
+                                <span>{formatCurrency(taxSplit.igst)}</span>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex justify-between text-slate-600">
+                                    <span>CGST ({(taxRate / 2).toFixed(2)}%)</span>
+                                    <span>{formatCurrency(taxSplit.cgst)}</span>
+                                </div>
+                                <div className="flex justify-between text-slate-600">
+                                    <span>SGST ({(taxRate / 2).toFixed(2)}%)</span>
+                                    <span>{formatCurrency(taxSplit.sgst)}</span>
+                                </div>
+                            </>
+                        )}
                         <div className="flex justify-between text-2xl print:text-lg font-bold text-slate-900 border-t-2 border-slate-900 pt-3 print:pt-1 mt-3 print:mt-1">
                             <span>Total</span>
-                            <span>{formatCurrency(quote.totalAmount)}</span>
+                            <span>{formatCurrency(quote.totalAmount ?? finalTotal)}</span>
                         </div>
                     </div>
                 </div>

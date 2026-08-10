@@ -61,12 +61,12 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
   const [sections, setSections] = useState<WindowSection[]>(
     initialValues?.sections || [
       {
-        id: `section-${Date.now()}`,
+        id: `section-${crypto.randomUUID()}`,
         name: "Section 1",
         sectionTypeId: defaultSectionTypeId,
         dimensions: [
           {
-            id: `dim-${Date.now()}`,
+            id: `dim-${crypto.randomUUID()}`,
             height: null,
             width: null,
             quantity: null,
@@ -117,12 +117,12 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
 
   const addSection = () => {
     const newSection: WindowSection = {
-      id: `section-${Date.now()}`,
+      id: `section-${crypto.randomUUID()}`,
       name: `Section ${sections.length + 1}`,
       sectionTypeId: defaultSectionTypeId,
       dimensions: [
         {
-          id: `dim-${Date.now()}`,
+          id: `dim-${crypto.randomUUID()}`,
           height: null,
           width: null,
           quantity: null,
@@ -230,7 +230,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                       dimensions: [
                         ...s.dimensions,
                         {
-                          id: `dim-${Date.now()}-${Math.random()}`,
+                          id: `dim-${crypto.randomUUID()}`,
                           height: null,
                           width: null,
                           quantity: null,
@@ -323,12 +323,12 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
   const handleReset = () => {
     setSections([
       {
-        id: `section-${Date.now()}`,
+        id: `section-${crypto.randomUUID()}`,
         name: "Section 1",
         sectionTypeId: defaultSectionTypeId,
         dimensions: [
           {
-            id: `dim-${Date.now()}`,
+            id: `dim-${crypto.randomUUID()}`,
             height: null,
             width: null,
             quantity: null,

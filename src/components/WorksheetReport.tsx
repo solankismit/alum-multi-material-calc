@@ -154,11 +154,6 @@ export default function WorksheetReport({
                                     value={`${totalWastageFt.toFixed(1)} ft`}
                                     subValue={`${result.combinedSummary.wastagePercent.toFixed(1)}% of used stock`}
                                 />
-                                <SummaryCard
-                                    title="Est. Total Weight"
-                                    value={`${result.combinedSummary.totalMaterial.toFixed(2)} kg`} // Placeholder logic reuse
-                                    subValue="(Approximate)"
-                                />
                             </div>
                         </section>
 

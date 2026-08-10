@@ -11,6 +11,16 @@ import Link from "next/link";
 import { createQuotation } from "../actions";
 import { resolveMaterialCategory, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
 import { calculateLaborCost, type LaborMode } from "@/utils/laborCost";
+import {
+    computeTotals,
+    sumLaborItems,
+    DEFAULT_TAX_TYPE,
+    type LineItem,
+    type SectionPricing,
+    type LaborItem,
+    type TaxType,
+    type CostInclusion,
+} from "@/utils/quotationPricing";
 import type { MaterialCategory, WindowInput } from "@/types";
 import WindowSchematic from "@/components/WindowSchematic";
 import { useToast } from "@/components/ui/Toast";
@@ -42,39 +52,22 @@ interface FreeformItem {
     rate: number;
 }
 
+interface HardwareDraftItem {
+    id: string;
+    name: string;
+    quantity: number;
+    unit: string;
+    rate: number;
+}
+
 interface SectionResult {
     sectionId: string;
     sectionName: string;
     sectionTypeName?: string;
     materials: Array<{ category?: MaterialCategory; component: string; stockBreakdown: { stockName: string; stockLength: number; stocksNeeded: number } }>;
-    glassInfo: Array<{ glassSize: { totalArea: number } }>;
+    glassInfo: Array<{ glassSize: { totalArea: number; width?: number; height?: number } }>;
     accessories: { mosquitoCChannel: number; trackCap: number };
-}
-
-interface LineItem {
-    name: string;
-    quantity?: number;
-    area?: number;
-    unit: string;
-    rate: number;
-    cost: number;
-}
-
-interface SectionPricing {
-    sectionId: string;
-    sectionName: string;
-    sectionTypeName?: string;
-    trackType: string;
-    configuration: string;
-    panels: number;
-    qty: number;
-    areaSqFt: number;
-    widthMm: number;
-    heightMm: number;
-    profiles: LineItem[];
-    glass: LineItem[];
-    accessories: LineItem[];
-    subtotal: number;
+    summary?: { wastagePercent?: number; totalMosquitoArea?: number };
 }
 
 /**
@@ -105,6 +98,32 @@ const LABOR_MODE_LABELS: Record<LaborMode, string> = {
     percentOfMaterial: "% of Material Cost",
     perSqft: "₹ per Sq.Ft",
 };
+
+const TRACK_TYPE_LABELS: Record<string, string> = {
+    "2-track": "2-Track",
+    "3-track": "3-Track",
+    openable: "Openable",
+};
+
+const CONFIGURATION_LABELS: Record<string, string> = {
+    "all-glass": "All Glass",
+    "glass-mosquito": "Glass + Mosquito",
+};
+
+function buildConfigLabel(section: {
+    sectionTypeName?: string;
+    trackType: string;
+    configuration: string;
+    panels: number;
+}): string {
+    const parts = [
+        section.sectionTypeName,
+        TRACK_TYPE_LABELS[section.trackType] ?? section.trackType,
+        CONFIGURATION_LABELS[section.configuration] ?? section.configuration,
+        section.panels ? `${section.panels} Shutter${section.panels > 1 ? "s" : ""}` : undefined,
+    ];
+    return parts.filter(Boolean).join(" — ");
+}
 
 function computeOverallAreaSqFt(sections: WindowInput["sections"] | undefined): number {
     if (!sections) return 0;
@@ -186,6 +205,10 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         { id: crypto.randomUUID(), name: "", quantity: 1, unit: "nos", rate: 0 },
     ]);
 
+    // Extra hardware/mesh line items added per section, on top of the
+    // auto-computed mesh/track-cap accessories (e.g. rollers, handles, locks).
+    const [extraHardware, setExtraHardware] = useState<Record<string, HardwareDraftItem[]>>({});
+
     // Overheads — seeded from rate card defaults. Freeform quotations have no
     // material-cost/area basis for the percent/per-sqft labor modes — always
     // fall back to flat there.
@@ -195,12 +218,26 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
     const [laborFlatAmount, setLaborFlatAmount] = useState<number>(initialRateCard?.laborDefault ?? 0);
     const [laborPercent, setLaborPercent] = useState<number>(initialRateCard?.laborPercent ?? 0);
     const [laborRatePerSqft, setLaborRatePerSqft] = useState<number>(initialRateCard?.laborRatePerSqft ?? 0);
+    const [laborItemized, setLaborItemized] = useState(false);
+    const [laborItems, setLaborItems] = useState<LaborItem[]>([
+        { name: "Cutting & Assembly", amount: 0 },
+        { name: "Glazing", amount: 0 },
+        { name: "Hardware Fitting", amount: 0 },
+    ]);
     const [overheadCost, setOverheadCost] = useState<number>(initialRateCard?.overheadDefault ?? 0);
     const [profitMargin, setProfitMargin] = useState<number>(initialRateCard?.profitMarginDefault ?? 0);
     const [taxRate, setTaxRate] = useState<number>(initialRateCard?.taxRateDefault ?? 0);
+    const [taxType, setTaxType] = useState<TaxType>(DEFAULT_TAX_TYPE);
     const [discountType, setDiscountType] = useState<DiscountType>("percent");
     const [discountValue, setDiscountValue] = useState<number>(0);
     const [termsText, setTermsText] = useState<string>(initialRateCard?.termsText ?? "");
+
+    const [installationIncluded, setInstallationIncluded] = useState(false);
+    const [installationAmount, setInstallationAmount] = useState(0);
+    const [installationNote, setInstallationNote] = useState("");
+    const [transportationIncluded, setTransportationIncluded] = useState(false);
+    const [transportationAmount, setTransportationAmount] = useState(0);
+    const [transportationNote, setTransportationNote] = useState("");
 
     // Metadata
     const [clientName, setClientName] = useState("");
@@ -208,6 +245,9 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
     const [clientAddress, setClientAddress] = useState("");
     const [deliveryAddress, setDeliveryAddress] = useState("");
     const [customerRef, setCustomerRef] = useState("");
+
+    const installation: CostInclusion = { included: installationIncluded, amount: installationAmount, note: installationNote };
+    const transportation: CostInclusion = { included: transportationIncluded, amount: transportationAmount, note: transportationNote };
 
     const totals = useMemo(() => {
         if (worksheetId) {
@@ -245,15 +285,35 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 });
 
                 const sectionGlassAreaSqFt = section.glassInfo.reduce((sum, g) => sum + g.glassSize.totalArea, 0) / AREA_SQMM_PER_SQFT;
+                const firstGlassSize = section.glassInfo[0]?.glassSize;
                 const glass: LineItem[] = sectionGlassAreaSqFt > 0
-                    ? [{ name: typeRates?.glassType || "Glass", area: sectionGlassAreaSqFt, unit: "sqft", rate: typeRates?.glassRate || 0, cost: sectionGlassAreaSqFt * (typeRates?.glassRate || 0) }]
+                    ? [{
+                        name: typeRates?.glassType || "Glass",
+                        area: sectionGlassAreaSqFt,
+                        unit: "sqft",
+                        rate: typeRates?.glassRate || 0,
+                        cost: sectionGlassAreaSqFt * (typeRates?.glassRate || 0),
+                        widthMm: firstGlassSize?.width,
+                        heightMm: firstGlassSize?.height,
+                    }]
                     : [];
 
                 const meshRate = typeRates?.meshRate || 0;
                 const trackCapRate = typeRates?.trackCapRate || 0;
+                const meshName = inputSection?.mosquitoMeshGrade
+                    ? `Mosquito Mesh (${inputSection.mosquitoMeshGrade})`
+                    : "Mosquito Mesh / C-Channel";
+                const meshAreaSqFt = (section.summary?.totalMosquitoArea || 0) / AREA_SQMM_PER_SQFT;
+                const extraHardwareItems: LineItem[] = (extraHardware[section.sectionId] || [])
+                    .filter((item) => item.name.trim())
+                    .map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit, rate: item.rate, cost: item.quantity * item.rate }));
+
                 const accessories: LineItem[] = [
-                    ...(section.accessories.mosquitoCChannel > 0 ? [{ name: "Mosquito Mesh / C-Channel", quantity: section.accessories.mosquitoCChannel, unit: "nos", rate: meshRate, cost: section.accessories.mosquitoCChannel * meshRate }] : []),
+                    ...(section.accessories.mosquitoCChannel > 0
+                        ? [{ name: meshName, quantity: section.accessories.mosquitoCChannel, unit: "nos", area: meshAreaSqFt || undefined, rate: meshRate, cost: section.accessories.mosquitoCChannel * meshRate }]
+                        : []),
                     ...(section.accessories.trackCap > 0 ? [{ name: "Track Cap", quantity: section.accessories.trackCap, unit: "nos", rate: trackCapRate, cost: section.accessories.trackCap * trackCapRate }] : []),
+                    ...extraHardwareItems,
                 ];
 
                 const subtotal =
@@ -265,6 +325,12 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                     sectionId: section.sectionId,
                     sectionName: section.sectionName,
                     sectionTypeName: section.sectionTypeName,
+                    configLabel: buildConfigLabel({
+                        sectionTypeName: section.sectionTypeName,
+                        trackType: isOpenable ? "openable" : (inputSection?.trackType || "2-track"),
+                        configuration: inputSection?.configuration || "all-glass",
+                        panels: isOpenable ? (panelsRaw as number) : 2,
+                    }),
                     trackType: isOpenable ? "openable" : (inputSection?.trackType || "2-track"),
                     configuration: inputSection?.configuration || "all-glass",
                     panels: isOpenable ? (panelsRaw as number) : 2,
@@ -276,6 +342,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                     glass,
                     accessories,
                     subtotal,
+                    materialWastagePercent: section.summary?.wastagePercent,
                 };
             });
 
@@ -287,18 +354,25 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
             const totalAccessoryCost = sectionBreakdowns.reduce((sum, s) => sum + s.accessories.reduce((ss, a) => ss + a.cost, 0), 0);
 
             const materialCost = totalProfileCost + totalGlassCost + totalAccessoryCost;
-            const laborCost = calculateLaborCost(
-                laborMode,
-                { flatAmount: laborFlatAmount, percent: laborPercent, ratePerSqft: laborRatePerSqft },
-                { materialCost, totalAreaSqFt: overallAreaSqFt }
-            );
+            const laborCost = laborItemized
+                ? sumLaborItems(laborItems)
+                : calculateLaborCost(
+                    laborMode,
+                    { flatAmount: laborFlatAmount, percent: laborPercent, ratePerSqft: laborRatePerSqft },
+                    { materialCost, totalAreaSqFt: overallAreaSqFt }
+                );
 
-            const subTotal = materialCost + laborCost + Number(overheadCost);
-            const discountAmount = discountType === "percent" ? subTotal * (discountValue / 100) : discountValue;
-            const discountedSubtotal = Math.max(0, subTotal - discountAmount);
-            const profitAmount = discountedSubtotal * (profitMargin / 100);
-            const taxableAmount = discountedSubtotal + profitAmount;
-            const taxAmount = taxableAmount * (taxRate / 100);
+            const computed = computeTotals({
+                materialCost,
+                laborCost,
+                overheadCost: Number(overheadCost),
+                installation,
+                transportation,
+                discountType,
+                discountValue,
+                profitMarginPercent: profitMargin,
+                taxRatePercent: taxRate,
+            });
 
             return {
                 sectionBreakdowns,
@@ -309,29 +383,33 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 meshCount,
                 trackCapCount,
                 totalAccessoryCost,
+                itemsCost: 0,
                 laborCost,
-                subTotal,
-                discountAmount,
-                discountedSubtotal,
-                profitAmount,
-                taxAmount,
-                finalTotal: taxableAmount + taxAmount,
+                ...computed,
             };
         }
 
         // Direct-entry mode — only flat labor makes sense (no material cost/area basis)
         const itemsCost = freeformItems.reduce((sum, item) => sum + item.quantity * item.rate, 0);
-        const laborCost = calculateLaborCost(
-            "flat",
-            { flatAmount: laborFlatAmount, percent: laborPercent, ratePerSqft: laborRatePerSqft },
-            { materialCost: itemsCost, totalAreaSqFt: 0 }
-        );
-        const subTotal = itemsCost + laborCost + Number(overheadCost);
-        const discountAmount = discountType === "percent" ? subTotal * (discountValue / 100) : discountValue;
-        const discountedSubtotal = Math.max(0, subTotal - discountAmount);
-        const profitAmount = discountedSubtotal * (profitMargin / 100);
-        const taxableAmount = discountedSubtotal + profitAmount;
-        const taxAmount = taxableAmount * (taxRate / 100);
+        const laborCost = laborItemized
+            ? sumLaborItems(laborItems)
+            : calculateLaborCost(
+                "flat",
+                { flatAmount: laborFlatAmount, percent: laborPercent, ratePerSqft: laborRatePerSqft },
+                { materialCost: itemsCost, totalAreaSqFt: 0 }
+            );
+
+        const computed = computeTotals({
+            materialCost: itemsCost,
+            laborCost,
+            overheadCost: Number(overheadCost),
+            installation,
+            transportation,
+            discountType,
+            discountValue,
+            profitMarginPercent: profitMargin,
+            taxRatePercent: taxRate,
+        });
 
         return {
             sectionBreakdowns: [] as SectionPricing[],
@@ -344,14 +422,30 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
             totalAccessoryCost: 0,
             itemsCost,
             laborCost,
-            subTotal,
-            discountAmount,
-            discountedSubtotal,
-            profitAmount,
-            taxAmount,
-            finalTotal: taxableAmount + taxAmount,
+            ...computed,
         };
-    }, [worksheetId, sectionResults, windowInput, sectionTypeRates, freeformItems, laborMode, laborFlatAmount, laborPercent, laborRatePerSqft, overheadCost, profitMargin, taxRate, discountType, discountValue, overallAreaSqFt]);
+    }, [
+        worksheetId,
+        sectionResults,
+        windowInput,
+        sectionTypeRates,
+        extraHardware,
+        freeformItems,
+        laborMode,
+        laborFlatAmount,
+        laborPercent,
+        laborRatePerSqft,
+        laborItemized,
+        laborItems,
+        overheadCost,
+        profitMargin,
+        taxRate,
+        discountType,
+        discountValue,
+        overallAreaSqFt,
+        installation,
+        transportation,
+    ]);
 
     const addFreeformItem = () => {
         setFreeformItems([...freeformItems, { id: crypto.randomUUID(), name: "", quantity: 1, unit: "nos", rate: 0 }]);
@@ -365,18 +459,66 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         setFreeformItems(freeformItems.filter((item) => item.id !== id));
     };
 
+    const addHardwareItem = (sectionId: string) => {
+        setExtraHardware({
+            ...extraHardware,
+            [sectionId]: [...(extraHardware[sectionId] || []), { id: crypto.randomUUID(), name: "", quantity: 1, unit: "nos", rate: 0 }],
+        });
+    };
+
+    const updateHardwareItem = (sectionId: string, itemId: string, updates: Partial<HardwareDraftItem>) => {
+        setExtraHardware({
+            ...extraHardware,
+            [sectionId]: (extraHardware[sectionId] || []).map((item) => {
+                if (item.id !== itemId) return item;
+                const next = { ...item, ...updates };
+                // Auto-fill the rate from the rate card the first time a known hardware name is typed.
+                if (updates.name !== undefined && next.rate === 0 && rateCard?.hardwareRates[updates.name] !== undefined) {
+                    next.rate = rateCard.hardwareRates[updates.name];
+                }
+                return next;
+            }),
+        });
+    };
+
+    const removeHardwareItem = (sectionId: string, itemId: string) => {
+        setExtraHardware({
+            ...extraHardware,
+            [sectionId]: (extraHardware[sectionId] || []).filter((item) => item.id !== itemId),
+        });
+    };
+
+    const addLaborItem = () => {
+        setLaborItems([...laborItems, { name: "", amount: 0 }]);
+    };
+
+    const updateLaborItem = (index: number, updates: Partial<LaborItem>) => {
+        setLaborItems(laborItems.map((item, idx) => (idx === index ? { ...item, ...updates } : item)));
+    };
+
+    const removeLaborItem = (index: number) => {
+        setLaborItems(laborItems.filter((_, idx) => idx !== index));
+    };
+
     const handleSave = async () => {
         setSaving(true);
         try {
+            const laborBreakdown = laborItemized
+                ? { mode: "itemized" as const, items: laborItems.filter((item) => item.name.trim()) }
+                : { mode: laborMode, percent: laborPercent, ratePerSqft: laborRatePerSqft };
+
             const pricingData = worksheetId
                 ? {
                     sections: totals.sectionBreakdowns,
                     labor: totals.laborCost,
-                    laborBreakdown: { mode: laborMode, percent: laborPercent, ratePerSqft: laborRatePerSqft },
+                    laborBreakdown,
                     overhead: overheadCost,
+                    installation,
+                    transportation,
                     discount: { type: discountType, value: discountValue, amount: totals.discountAmount },
                     profitMargin,
                     taxRate,
+                    taxType,
                     termsText,
                 }
                 : {
@@ -386,11 +528,14 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                         .filter((item) => item.name.trim())
                         .map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit, rate: item.rate, cost: item.quantity * item.rate })),
                     labor: totals.laborCost,
-                    laborBreakdown: { mode: "flat" as const, percent: laborPercent, ratePerSqft: laborRatePerSqft },
+                    laborBreakdown,
                     overhead: overheadCost,
+                    installation,
+                    transportation,
                     discount: { type: discountType, value: discountValue, amount: totals.discountAmount },
                     profitMargin,
                     taxRate,
+                    taxType,
                     termsText,
                 };
 
@@ -418,6 +563,11 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
 
     return (
         <div className="min-h-screen bg-surface-muted p-6 md:p-8 font-sans">
+            <datalist id="hardware-rate-suggestions">
+                {Object.keys(rateCard?.hardwareRates || {}).map((name) => (
+                    <option key={name} value={name} />
+                ))}
+            </datalist>
             <div className="max-w-4xl mx-auto space-y-6">
                 <div className="flex items-center justify-between">
                     <Link href="/dashboard">
@@ -570,7 +720,8 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                     ))}
                                 </div>
 
-                                {/* Sections — read-only summary: diagram + qty/area + computed subtotal, one table row per section */}
+                                {/* Sections — diagram + qty/area + computed subtotal, one row per
+                                    section, plus an inline editor for extra hardware/mesh items. */}
                                 <div className="bg-surface rounded-xl border border-border shadow-sm overflow-hidden">
                                     <h2 className="font-semibold text-lg text-text border-b p-4 pb-3">Sections</h2>
                                     <table className="w-full text-sm border-collapse">
@@ -600,9 +751,63 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                                             {section.sectionName}{section.qty > 1 ? ` × ${section.qty}` : ""}
                                                         </div>
                                                         <div className="text-text-muted text-xs">
-                                                            {section.sectionTypeName ? `${section.sectionTypeName} — ` : ""}
+                                                            {section.configLabel ? `${section.configLabel} — ` : ""}
                                                             {(section.widthMm > 0 || section.heightMm > 0) && `${Math.round(section.widthMm)} × ${Math.round(section.heightMm)} mm — `}
                                                             {section.areaSqFt.toFixed(2)} sq.ft
+                                                            {typeof section.materialWastagePercent === "number" && ` — ${section.materialWastagePercent.toFixed(1)}% wastage`}
+                                                        </div>
+
+                                                        {/* Extra hardware / mesh items for this section */}
+                                                        <div className="mt-2 space-y-1">
+                                                            {(extraHardware[section.sectionId] || []).map((item) => (
+                                                                <div key={item.id} className="grid grid-cols-12 gap-1 items-center">
+                                                                    <div className="col-span-5">
+                                                                        <Input
+                                                                            list="hardware-rate-suggestions"
+                                                                            placeholder="Hardware name (e.g. Roller, Handle, Lock)"
+                                                                            className="h-7 text-xs"
+                                                                            value={item.name}
+                                                                            onChange={(e) => updateHardwareItem(section.sectionId, item.id, { name: e.target.value })}
+                                                                        />
+                                                                    </div>
+                                                                    <div className="col-span-2">
+                                                                        <Input
+                                                                            type="number"
+                                                                            placeholder="Qty"
+                                                                            className="h-7 text-xs"
+                                                                            value={item.quantity || ""}
+                                                                            onChange={(e) => updateHardwareItem(section.sectionId, item.id, { quantity: parseFloat(e.target.value) || 0 })}
+                                                                        />
+                                                                    </div>
+                                                                    <div className="col-span-2">
+                                                                        <Input
+                                                                            placeholder="Unit"
+                                                                            className="h-7 text-xs"
+                                                                            value={item.unit}
+                                                                            onChange={(e) => updateHardwareItem(section.sectionId, item.id, { unit: e.target.value })}
+                                                                        />
+                                                                    </div>
+                                                                    <div className="col-span-2">
+                                                                        <Input
+                                                                            type="number"
+                                                                            placeholder="Rate"
+                                                                            className="h-7 text-xs"
+                                                                            value={item.rate || ""}
+                                                                            onChange={(e) => updateHardwareItem(section.sectionId, item.id, { rate: parseFloat(e.target.value) || 0 })}
+                                                                        />
+                                                                    </div>
+                                                                    <button type="button" onClick={() => removeHardwareItem(section.sectionId, item.id)} className="col-span-1 text-text-muted hover:text-danger">
+                                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => addHardwareItem(section.sectionId)}
+                                                                className="text-xs text-primary hover:underline flex items-center gap-1"
+                                                            >
+                                                                <Plus className="w-3 h-3" /> Add hardware
+                                                            </button>
                                                         </div>
                                                     </td>
                                                     <td className="p-2 text-right font-bold text-text whitespace-nowrap">{formatCurrency(section.subtotal)}</td>
@@ -668,38 +873,78 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                             <h2 className="font-semibold text-lg text-text border-b pb-2">Costs & Margins</h2>
 
                             <div className="space-y-2">
-                                <Label>Labor Cost</Label>
-                                {worksheetId && (
-                                    <div className="flex flex-wrap gap-2">
-                                        {(Object.keys(LABOR_MODE_LABELS) as LaborMode[]).map((mode) => (
-                                            <button
-                                                key={mode}
-                                                type="button"
-                                                onClick={() => setLaborMode(mode)}
-                                                className={`px-3 py-1 rounded-md text-xs font-medium border transition-colors ${laborMode === mode
-                                                    ? "bg-text text-surface border-text"
-                                                    : "bg-surface text-text-muted border-border hover:bg-surface-muted"
-                                                    }`}
-                                            >
-                                                {LABOR_MODE_LABELS[mode]}
-                                            </button>
+                                <div className="flex items-center justify-between">
+                                    <Label>Labor Cost</Label>
+                                    <label className="flex items-center gap-1.5 text-xs text-text-muted">
+                                        <input type="checkbox" checked={laborItemized} onChange={(e) => setLaborItemized(e.target.checked)} />
+                                        Itemize by activity
+                                    </label>
+                                </div>
+
+                                {laborItemized ? (
+                                    <div className="space-y-2">
+                                        {laborItems.map((item, idx) => (
+                                            <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                                                <div className="col-span-7">
+                                                    <Input
+                                                        placeholder="Activity (e.g. Cutting, Glazing)"
+                                                        value={item.name}
+                                                        onChange={(e) => updateLaborItem(idx, { name: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div className="col-span-4">
+                                                    <Input
+                                                        type="number"
+                                                        placeholder="₹"
+                                                        value={item.amount || ""}
+                                                        onChange={(e) => updateLaborItem(idx, { amount: parseFloat(e.target.value) || 0 })}
+                                                    />
+                                                </div>
+                                                <button type="button" onClick={() => removeLaborItem(idx)} className="col-span-1 text-text-muted hover:text-danger">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         ))}
+                                        <Button type="button" size="sm" variant="outline" onClick={addLaborItem}>
+                                            <Plus className="w-4 h-4 mr-1" /> Add Activity
+                                        </Button>
+                                        <p className="text-xs text-text-muted">Total labour: {formatCurrency(totals.laborCost)}</p>
                                     </div>
-                                )}
-                                {laborMode === "flat" && (
-                                    <Input type="number" value={laborFlatAmount} onChange={(e) => setLaborFlatAmount(parseFloat(e.target.value) || 0)} />
-                                )}
-                                {laborMode === "percentOfMaterial" && (
-                                    <div className="flex items-center gap-2">
-                                        <Input type="number" value={laborPercent} onChange={(e) => setLaborPercent(parseFloat(e.target.value) || 0)} className="max-w-[120px]" />
-                                        <span className="text-sm text-text-muted">% → {formatCurrency(totals.laborCost)}</span>
-                                    </div>
-                                )}
-                                {laborMode === "perSqft" && (
-                                    <div className="flex items-center gap-2">
-                                        <Input type="number" value={laborRatePerSqft} onChange={(e) => setLaborRatePerSqft(parseFloat(e.target.value) || 0)} className="max-w-[120px]" />
-                                        <span className="text-sm text-text-muted">₹/sq.ft → {formatCurrency(totals.laborCost)}</span>
-                                    </div>
+                                ) : (
+                                    <>
+                                        {worksheetId && (
+                                            <div className="flex flex-wrap gap-2">
+                                                {(Object.keys(LABOR_MODE_LABELS) as LaborMode[]).map((mode) => (
+                                                    <button
+                                                        key={mode}
+                                                        type="button"
+                                                        onClick={() => setLaborMode(mode)}
+                                                        className={`px-3 py-1 rounded-md text-xs font-medium border transition-colors ${laborMode === mode
+                                                            ? "bg-text text-surface border-text"
+                                                            : "bg-surface text-text-muted border-border hover:bg-surface-muted"
+                                                            }`}
+                                                    >
+                                                        {LABOR_MODE_LABELS[mode]}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {laborMode === "flat" && (
+                                            <Input type="number" value={laborFlatAmount} onChange={(e) => setLaborFlatAmount(parseFloat(e.target.value) || 0)} />
+                                        )}
+                                        {laborMode === "percentOfMaterial" && (
+                                            <div className="flex items-center gap-2">
+                                                <Input type="number" value={laborPercent} onChange={(e) => setLaborPercent(parseFloat(e.target.value) || 0)} className="max-w-[120px]" />
+                                                <span className="text-sm text-text-muted">% → {formatCurrency(totals.laborCost)}</span>
+                                            </div>
+                                        )}
+                                        {laborMode === "perSqft" && (
+                                            <div className="flex items-center gap-2">
+                                                <Input type="number" value={laborRatePerSqft} onChange={(e) => setLaborRatePerSqft(parseFloat(e.target.value) || 0)} className="max-w-[120px]" />
+                                                <span className="text-sm text-text-muted">₹/sq.ft → {formatCurrency(totals.laborCost)}</span>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
 
@@ -728,7 +973,45 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                 </div>
                                 <div>
                                     <Label>Tax / GST (%)</Label>
-                                    <Input type="number" value={taxRate} onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)} />
+                                    <div className="flex gap-1">
+                                        <Input type="number" value={taxRate} onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)} className="flex-1" />
+                                        <select
+                                            value={taxType}
+                                            onChange={(e) => setTaxType(e.target.value as TaxType)}
+                                            className="h-10 rounded-md border border-border px-1 text-xs bg-surface"
+                                            title="Intra-state splits into CGST+SGST; inter-state uses IGST"
+                                        >
+                                            <option value="CGST_SGST">CGST+SGST</option>
+                                            <option value="IGST">IGST</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border">
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 text-sm font-medium text-text">
+                                        <input type="checkbox" checked={installationIncluded} onChange={(e) => setInstallationIncluded(e.target.checked)} />
+                                        Installation Included
+                                    </label>
+                                    {installationIncluded && (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Input type="number" placeholder="Amount ₹" value={installationAmount || ""} onChange={(e) => setInstallationAmount(parseFloat(e.target.value) || 0)} />
+                                            <Input placeholder="Note (optional)" value={installationNote} onChange={(e) => setInstallationNote(e.target.value)} />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 text-sm font-medium text-text">
+                                        <input type="checkbox" checked={transportationIncluded} onChange={(e) => setTransportationIncluded(e.target.checked)} />
+                                        Transportation Included
+                                    </label>
+                                    {transportationIncluded && (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Input type="number" placeholder="Amount ₹" value={transportationAmount || ""} onChange={(e) => setTransportationAmount(parseFloat(e.target.value) || 0)} />
+                                            <Input placeholder="Note (optional)" value={transportationNote} onChange={(e) => setTransportationNote(e.target.value)} />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -752,6 +1035,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                     <div className="md:col-span-1 order-first md:order-none">
                         <div className="bg-surface-inverse text-text-inverse p-6 rounded-xl shadow-lg sticky top-6 space-y-6">
                             <h2 className="text-xl font-bold text-text-inverse border-b border-white/20 pb-2">Estimated Total</h2>
+                            <p className="text-xs text-text-inverse/50 -mt-4">Internal figures — this breakdown is never shown to the customer.</p>
 
                             <div className="space-y-4 text-sm">
                                 {worksheetId ? (
@@ -779,6 +1063,18 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                     <span className="text-text-inverse/70">Labor & Overhead</span>
                                     <span>{formatCurrency(totals.laborCost + Number(overheadCost))}</span>
                                 </div>
+                                {installationIncluded && installationAmount > 0 && (
+                                    <div className="flex justify-between">
+                                        <span className="text-text-inverse/70">Installation</span>
+                                        <span>{formatCurrency(installationAmount)}</span>
+                                    </div>
+                                )}
+                                {transportationIncluded && transportationAmount > 0 && (
+                                    <div className="flex justify-between">
+                                        <span className="text-text-inverse/70">Transportation</span>
+                                        <span>{formatCurrency(transportationAmount)}</span>
+                                    </div>
+                                )}
                                 <div className="border-t border-white/20 pt-2 flex justify-between font-semibold">
                                     <span>Subtotal</span>
                                     <span>{formatCurrency(totals.subTotal)}</span>
@@ -794,7 +1090,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                     <span>{formatCurrency(totals.profitAmount)}</span>
                                 </div>
                                 <div className="flex justify-between text-text-inverse/70">
-                                    <span>Tax ({taxRate}%)</span>
+                                    <span>Tax ({taxRate}%, {taxType === "IGST" ? "IGST" : "CGST+SGST"})</span>
                                     <span>{formatCurrency(totals.taxAmount)}</span>
                                 </div>
                             </div>
