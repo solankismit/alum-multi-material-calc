@@ -8,12 +8,12 @@ import { revalidateTag } from "next/cache";
 const sectionSchema = z.object({
     name: z.string().min(1, "Name is required"),
     isActive: z.boolean().default(true),
-    systemType: z.string().default("sliding"),
+    systemType: z.enum(["sliding", "openable"]).default("sliding"),
     trackTypes: z.array(z.string()).default([]),
     configs: z.array(z.string()).default([]),
     configurations: z.array(z.object({
-        trackType: z.string(),
-        configuration: z.string(),
+        trackType: z.enum(["2-track", "3-track", "openable"]),
+        configuration: z.enum(["all-glass", "glass-mosquito"]),
         shutterWidthDeduction: z.number().default(0),
         heightDeduction: z.number().default(0),
         threeTrackWidthAddition: z.number().default(0),

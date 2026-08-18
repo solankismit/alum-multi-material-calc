@@ -127,6 +127,10 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
     // consistent, not just assumed.
     type VerifyLine = { label: string; expected: number; predicted: number };
     const [verifyResults, setVerifyResults] = useState<Record<number, VerifyLine[]>>({});
+    // Fields left blank during derive silently keep their deduction at 0 (or
+    // whatever it was before) — flag these so a skipped field doesn't read as
+    // "verified" when it was never actually checked.
+    const [deriveWarnings, setDeriveWarnings] = useState<Record<number, string[]>>({});
 
     const handleDerive = (index: number) => {
         const ex = examples[index] || {};
@@ -205,6 +209,29 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
 
         if (!isNaN(glassW)) updates.glassWidthDeduction = round(shutterW - glassW);
         if (!isNaN(glassH)) updates.glassHeightDeduction = round(shutterH - glassH);
+
+        // Flag any measurement that was left blank — its deduction was NOT
+        // recomputed and stays at whatever it was before (0 for a new config),
+        // which silently produces an oversized/incorrect result downstream.
+        const warnings: string[] = [];
+        if (isNaN(glassW)) warnings.push("Resulting Glass Width was left blank — Glass Width Deduction was NOT updated and glass size will be wrong until you enter it.");
+        if (isNaN(glassH)) warnings.push("Resulting Glass Height was left blank — Glass Height Deduction was NOT updated and glass size will be wrong until you enter it.");
+        if (systemType === "sliding") {
+            const trackRailLenCheck = num(ex.resultTrackRailLength);
+            if (isNaN(trackRailLenCheck) && (config.hasTrackRail ?? true)) {
+                warnings.push("Resulting Track Rail Length was left blank — Track Rail Deduction was NOT updated (this section has a track rail).");
+            }
+        } else {
+            const n1Check = Math.max(1, num(ex.panels) || 1);
+            if (n1Check > 1) {
+                const mullionLenACheck = num(ex.resultMullionLength);
+                const mullionLenBCheck = num(exB.resultMullionLength);
+                if (isNaN(mullionLenACheck) && isNaN(mullionLenBCheck)) {
+                    warnings.push("Resulting Mullion Piece Length was left blank — Mullion Length Deduction was NOT updated.");
+                }
+            }
+        }
+        setDeriveWarnings(prev => ({ ...prev, [index]: warnings }));
 
         const newConfigs = [...configurations];
         newConfigs[index] = { ...newConfigs[index], ...updates };
@@ -509,6 +536,15 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                                     <Wand2 className="w-3.5 h-3.5 mr-2" />
                                     Compute deductions from this example
                                 </Button>
+
+                                {deriveWarnings[i] && deriveWarnings[i].length > 0 && (
+                                    <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-xs space-y-1">
+                                        <p className="font-semibold text-red-800">⚠ Not computed — fields left blank</p>
+                                        {deriveWarnings[i].map((w, wi) => (
+                                            <p key={wi} className="text-red-700">{w}</p>
+                                        ))}
+                                    </div>
+                                )}
 
                                 {verifyResults[i] && verifyResults[i].length > 0 && (() => {
                                     const allOk = verifyResults[i].every(l => Math.abs(l.expected - l.predicted) < 0.01);
