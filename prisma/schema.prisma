@@ -126,6 +126,10 @@ model Quotation {
 
   quotationNumber String?
   status          QuotationStatus @default(DRAFT)
+  // Set the first time this quotation is printed — combined with `status`,
+  // this determines whether the quotation is still editable (see
+  // isQuotationLocked in src/utils/quotationPricing.ts).
+  printedAt       DateTime?
 
   clientName      String?
   clientPhone     String?

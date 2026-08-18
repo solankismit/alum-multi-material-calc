@@ -6,15 +6,16 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
-import { ArrowLeft, Copy, List } from "lucide-react";
+import { ArrowLeft, Copy, List, Pencil } from "lucide-react";
 import { duplicateQuotation } from "../actions";
 
 interface QuotationHeaderActionsProps {
     id: string;
     worksheetId?: string | null;
+    locked: boolean;
 }
 
-export default function QuotationHeaderActions({ id, worksheetId }: QuotationHeaderActionsProps) {
+export default function QuotationHeaderActions({ id, worksheetId, locked }: QuotationHeaderActionsProps) {
     const router = useRouter();
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
@@ -28,8 +29,8 @@ export default function QuotationHeaderActions({ id, worksheetId }: QuotationHea
                 toast(res.error || "Failed to duplicate quotation", "error");
                 return;
             }
-            toast("Quotation duplicated.");
-            router.push(`/quotations/${res.id}`);
+            toast("Quotation duplicated — now editing the copy.");
+            router.push(`/quotations/create?editId=${res.id}`);
         });
     };
 
@@ -49,6 +50,14 @@ export default function QuotationHeaderActions({ id, worksheetId }: QuotationHea
                     </Button>
                 </Link>
             )}
+            {!locked && (
+                <Link href={`/quotations/create?editId=${id}`}>
+                    <Button variant="outline">
+                        <Pencil className="w-4 h-4 mr-2" />
+                        Edit
+                    </Button>
+                </Link>
+            )}
             <Button variant="outline" disabled={isPending} onClick={() => setConfirmOpen(true)}>
                 <Copy className="w-4 h-4 mr-2" />
                 Duplicate
@@ -58,7 +67,7 @@ export default function QuotationHeaderActions({ id, worksheetId }: QuotationHea
                 open={confirmOpen}
                 onOpenChange={setConfirmOpen}
                 title="Duplicate this quotation?"
-                description="This creates a new Draft quotation with the same details."
+                description="This creates a new editable Draft copy — the original stays as-is."
                 confirmLabel="Duplicate"
                 isLoading={isPending}
                 onConfirm={handleDuplicate}

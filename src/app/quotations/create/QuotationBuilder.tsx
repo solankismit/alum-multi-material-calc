@@ -6,9 +6,9 @@ import { formatCurrency, AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
-import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, FileText, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { createQuotation } from "../actions";
+import { createQuotation, updateQuotation } from "../actions";
 import { resolveMaterialCategory, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
 import { calculateLaborCost, type LaborMode } from "@/utils/laborCost";
 import {
@@ -20,10 +20,12 @@ import {
     type LaborItem,
     type TaxType,
     type CostInclusion,
+    type PricingData,
 } from "@/utils/quotationPricing";
 import type { MaterialCategory, WindowInput } from "@/types";
 import WindowSchematic from "@/components/WindowSchematic";
 import { useToast } from "@/components/ui/Toast";
+import ManualSectionForm, { type ManualSection, type ManualHardwareItem } from "./ManualSectionForm";
 
 export interface RateMap {
     [key: string]: number;
@@ -44,12 +46,14 @@ export interface RateCardData {
     termsText: string;
 }
 
-interface FreeformItem {
+export interface InitialQuotation {
     id: string;
-    name: string;
-    quantity: number;
-    unit: string;
-    rate: number;
+    pricingData: PricingData;
+    clientName: string;
+    clientPhone: string;
+    clientAddress: string;
+    deliveryAddress: string;
+    customerRef: string;
 }
 
 interface HardwareDraftItem {
@@ -138,37 +142,51 @@ function computeOverallAreaSqFt(sections: WindowInput["sections"] | undefined): 
     return totalSqMm / AREA_SQMM_PER_SQFT;
 }
 
-/** Derives the initial section-type rate bundles from a loaded worksheet + rate card. */
+/** Derives the initial section-type rate bundles from a loaded worksheet + rate card,
+ * recovering previously-saved rates (matched by section-type name) when editing. */
 function buildInitialSectionTypeRates(
     input: WindowInput | null,
     results: SectionResult[],
-    card: RateCardData | null
+    card: RateCardData | null,
+    existingPricing?: PricingData | null
 ): Record<string, SectionTypeRates> {
     const firstGlassType = card ? Object.keys(card.glassRates)[0] : undefined;
     const typeRates: Record<string, SectionTypeRates> = {};
 
+    const findSaved = (sectionTypeName: string) =>
+        existingPricing?.sections?.find((s) => (s.sectionTypeName || s.sectionName) === sectionTypeName);
+
     results.forEach((section) => {
         const inputSection = input?.sections.find((s) => s.id === section.sectionId);
         const key = getSectionTypeKey(section, inputSection?.sectionTypeId);
+        const typeName = section.sectionTypeName || section.sectionName;
 
         if (!typeRates[key]) {
+            const saved = findSaved(typeName);
+            const savedGlass = saved?.glass?.[0];
+            const savedMesh = saved?.accessories?.find((a) => a.area !== undefined);
+            const savedTrackCap = saved?.accessories?.find((a) => a.name === "Track Cap");
+
             typeRates[key] = {
                 sectionTypeKey: key,
-                sectionTypeName: section.sectionTypeName || section.sectionName,
+                sectionTypeName: typeName,
                 usedBySectionNames: [],
                 profileRates: {},
-                glassType: firstGlassType || "",
-                glassRate: firstGlassType && card ? card.glassRates[firstGlassType] : 0,
-                meshRate: card?.hardwareRates["Mosquito Mesh"] ?? card?.hardwareRates["C-Channel"] ?? 0,
-                trackCapRate: card?.hardwareRates["Track Cap"] ?? 0,
+                glassType: savedGlass?.name || firstGlassType || "",
+                glassRate: savedGlass?.rate ?? (firstGlassType && card ? card.glassRates[firstGlassType] : 0),
+                meshRate: savedMesh?.rate ?? (card?.hardwareRates["Mosquito Mesh"] ?? card?.hardwareRates["C-Channel"] ?? 0),
+                trackCapRate: savedTrackCap?.rate ?? (card?.hardwareRates["Track Cap"] ?? 0),
             };
         }
         typeRates[key].usedBySectionNames.push(section.sectionName);
 
+        const saved = findSaved(typeName);
         section.materials.forEach((mat) => {
             const category = resolveMaterialCategory(mat);
             if (typeRates[key].profileRates[category] === undefined) {
-                typeRates[key].profileRates[category] = card?.profileRates?.[category] ?? card?.profileRatePerFt ?? 0;
+                const label = MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category;
+                const savedLine = saved?.profiles?.find((p) => p.name === label);
+                typeRates[key].profileRates[category] = savedLine?.rate ?? (card?.profileRates?.[category] ?? card?.profileRatePerFt ?? 0);
             }
         });
     });
@@ -176,231 +194,326 @@ function buildInitialSectionTypeRates(
     return typeRates;
 }
 
+let manualSectionCounter = 0;
+function createEmptyManualSection(rateCard: RateCardData | null): ManualSection {
+    manualSectionCounter += 1;
+    const firstGlassType = rateCard ? Object.keys(rateCard.glassRates)[0] : undefined;
+    return {
+        id: crypto.randomUUID(),
+        name: `Section ${manualSectionCounter}`,
+        trackType: "2-track",
+        configuration: "all-glass",
+        height: null,
+        width: null,
+        quantity: 1,
+        glassType: firstGlassType || "",
+        glassRate: firstGlassType && rateCard ? rateCard.glassRates[firstGlassType] : 0,
+        frameRatePerSqft: 0,
+    };
+}
+
+/** Reconstructs editable manual sections from a previously-saved quotation's pricingData. */
+function buildInitialManualSections(pricing: PricingData | null | undefined, rateCard: RateCardData | null): ManualSection[] {
+    if (pricing?.sections && pricing.sections.length > 0) {
+        return pricing.sections.map((s) => ({
+            id: s.sectionId,
+            name: s.sectionName,
+            trackType: s.trackType === "3-track" ? "3-track" : "2-track",
+            configuration: s.configuration === "glass-mosquito" ? "glass-mosquito" : "all-glass",
+            height: s.heightMm || null,
+            width: s.widthMm || null,
+            quantity: s.qty || null,
+            glassType: s.glass[0]?.name || "",
+            glassRate: s.glass[0]?.rate || 0,
+            frameRatePerSqft: s.profiles[0]?.rate || 0,
+        }));
+    }
+    return [createEmptyManualSection(rateCard)];
+}
+
 export interface QuotationBuilderProps {
     worksheetId: string | null;
     initialRateCard: RateCardData | null;
     initialWorksheet: { input: WindowInput; result: { sectionResults: SectionResult[] } | null } | null;
+    initialQuotation?: InitialQuotation | null;
 }
 
-export default function QuotationBuilder({ worksheetId, initialRateCard, initialWorksheet }: QuotationBuilderProps) {
+export default function QuotationBuilder({ worksheetId, initialRateCard, initialWorksheet, initialQuotation }: QuotationBuilderProps) {
     const router = useRouter();
     const { toast } = useToast();
 
-    const [saving, setSaving] = useState(false);
+    const isEditMode = !!initialQuotation;
+    const [quotationId, setQuotationId] = useState<string | undefined>(initialQuotation?.id);
+    const seedPricing = initialQuotation?.pricingData ?? null;
+
+    const [saving, setSaving] = useState<"draft" | "final" | null>(null);
     const initialResults = initialWorksheet?.result?.sectionResults ?? [];
     const [sectionResults] = useState<SectionResult[]>(initialResults);
     const [windowInput] = useState<WindowInput | null>(initialWorksheet?.input ?? null);
     const [overallAreaSqFt] = useState<number>(computeOverallAreaSqFt(initialWorksheet?.input?.sections));
     const [rateCard] = useState<RateCardData | null>(initialRateCard);
 
-    // Pricing state — seeded from the rate card once it loads. Keyed by
-    // section-type: identical systems share one rate bundle automatically,
-    // different systems get independent ones.
+    // Pricing state — seeded from the rate card once it loads, or from the
+    // saved quotation's own rates when editing. Keyed by section-type:
+    // identical systems share one rate bundle automatically, different
+    // systems get independent ones.
     const [sectionTypeRates, setSectionTypeRates] = useState<Record<string, SectionTypeRates>>(
-        buildInitialSectionTypeRates(initialWorksheet?.input ?? null, initialResults, initialRateCard)
+        buildInitialSectionTypeRates(initialWorksheet?.input ?? null, initialResults, initialRateCard, seedPricing)
     );
 
-    // Direct-entry (no worksheet) line items
-    const [freeformItems, setFreeformItems] = useState<FreeformItem[]>([
-        { id: crypto.randomUUID(), name: "", quantity: 1, unit: "nos", rate: 0 },
-    ]);
-
-    // Extra hardware/mesh line items added per section, on top of the
-    // auto-computed mesh/track-cap accessories (e.g. rollers, handles, locks).
-    const [extraHardware, setExtraHardware] = useState<Record<string, HardwareDraftItem[]>>({});
-
-    // Overheads — seeded from rate card defaults. Freeform quotations have no
-    // material-cost/area basis for the percent/per-sqft labor modes — always
-    // fall back to flat there.
-    const [laborMode, setLaborMode] = useState<LaborMode>(
-        !worksheetId ? "flat" : initialRateCard?.laborMode ?? "flat"
+    // Manual (no-worksheet) sections — each has its own dimensions, track
+    // type/configuration, glass rate and a flat frame rate. Reconstructed
+    // from the saved quotation when editing a manual quote.
+    const [manualSections, setManualSections] = useState<ManualSection[]>(
+        !worksheetId ? buildInitialManualSections(seedPricing, initialRateCard) : []
     );
-    const [laborFlatAmount, setLaborFlatAmount] = useState<number>(initialRateCard?.laborDefault ?? 0);
-    const [laborPercent, setLaborPercent] = useState<number>(initialRateCard?.laborPercent ?? 0);
-    const [laborRatePerSqft, setLaborRatePerSqft] = useState<number>(initialRateCard?.laborRatePerSqft ?? 0);
-    const [laborItemized, setLaborItemized] = useState(false);
-    const [laborItems, setLaborItems] = useState<LaborItem[]>([
-        { name: "Cutting & Assembly", amount: 0 },
-        { name: "Glazing", amount: 0 },
-        { name: "Hardware Fitting", amount: 0 },
-    ]);
-    const [overheadCost, setOverheadCost] = useState<number>(initialRateCard?.overheadDefault ?? 0);
-    const [profitMargin, setProfitMargin] = useState<number>(initialRateCard?.profitMarginDefault ?? 0);
-    const [taxRate, setTaxRate] = useState<number>(initialRateCard?.taxRateDefault ?? 0);
-    const [taxType, setTaxType] = useState<TaxType>(DEFAULT_TAX_TYPE);
-    const [discountType, setDiscountType] = useState<DiscountType>("percent");
-    const [discountValue, setDiscountValue] = useState<number>(0);
-    const [termsText, setTermsText] = useState<string>(initialRateCard?.termsText ?? "");
+    const [manualUnitMode, setManualUnitMode] = useState<"mm" | "ft">("mm");
 
-    const [installationIncluded, setInstallationIncluded] = useState(false);
-    const [installationAmount, setInstallationAmount] = useState(0);
-    const [installationNote, setInstallationNote] = useState("");
-    const [transportationIncluded, setTransportationIncluded] = useState(false);
-    const [transportationAmount, setTransportationAmount] = useState(0);
-    const [transportationNote, setTransportationNote] = useState("");
+    // Extra hardware/mesh line items added per section (worksheet sections),
+    // on top of the auto-computed mesh/track-cap accessories, or per manual
+    // section (where it's the section's only accessory source). Keyed by
+    // section id, shared across both modes since ids never collide.
+    const [extraHardware, setExtraHardware] = useState<Record<string, HardwareDraftItem[]>>(
+        !worksheetId && seedPricing?.sections
+            ? seedPricing.sections.reduce<Record<string, HardwareDraftItem[]>>((acc, s) => {
+                if (s.accessories.length > 0) {
+                    acc[s.sectionId] = s.accessories.map((a) => ({
+                        id: crypto.randomUUID(),
+                        name: a.name,
+                        quantity: a.quantity || 0,
+                        unit: a.unit,
+                        rate: a.rate,
+                    }));
+                }
+                return acc;
+            }, {})
+            : {}
+    );
+
+    // Overheads — seeded from the saved quotation when editing, else from
+    // rate card defaults. Freeform quotations have no material-cost/area
+    // basis for the percent/per-sqft labor modes — always fall back to flat.
+    const initialLaborMode: LaborMode =
+        seedPricing?.laborBreakdown && seedPricing.laborBreakdown.mode !== "itemized"
+            ? seedPricing.laborBreakdown.mode
+            : !worksheetId ? "flat" : initialRateCard?.laborMode ?? "flat";
+    const [laborMode, setLaborMode] = useState<LaborMode>(initialLaborMode);
+    const [laborFlatAmount, setLaborFlatAmount] = useState<number>(
+        seedPricing && initialLaborMode === "flat" ? seedPricing.labor || 0 : initialRateCard?.laborDefault ?? 0
+    );
+    const [laborPercent, setLaborPercent] = useState<number>(
+        seedPricing?.laborBreakdown && seedPricing.laborBreakdown.mode !== "itemized" ? seedPricing.laborBreakdown.percent : initialRateCard?.laborPercent ?? 0
+    );
+    const [laborRatePerSqft, setLaborRatePerSqft] = useState<number>(
+        seedPricing?.laborBreakdown && seedPricing.laborBreakdown.mode !== "itemized" ? seedPricing.laborBreakdown.ratePerSqft : initialRateCard?.laborRatePerSqft ?? 0
+    );
+    const [laborItemized, setLaborItemized] = useState(seedPricing?.laborBreakdown?.mode === "itemized");
+    const [laborItems, setLaborItems] = useState<LaborItem[]>(
+        seedPricing?.laborBreakdown?.mode === "itemized" && seedPricing.laborBreakdown.items.length > 0
+            ? seedPricing.laborBreakdown.items
+            : [
+                { name: "Cutting & Assembly", amount: 0 },
+                { name: "Glazing", amount: 0 },
+                { name: "Hardware Fitting", amount: 0 },
+            ]
+    );
+    const [overheadCost, setOverheadCost] = useState<number>(seedPricing?.overhead ?? initialRateCard?.overheadDefault ?? 0);
+    const [profitMargin, setProfitMargin] = useState<number>(seedPricing?.profitMargin ?? initialRateCard?.profitMarginDefault ?? 0);
+    const [taxRate, setTaxRate] = useState<number>(seedPricing?.taxRate ?? initialRateCard?.taxRateDefault ?? 0);
+    const [taxType, setTaxType] = useState<TaxType>(seedPricing?.taxType ?? DEFAULT_TAX_TYPE);
+    const [discountType, setDiscountType] = useState<DiscountType>(seedPricing?.discount?.type ?? "percent");
+    const [discountValue, setDiscountValue] = useState<number>(seedPricing?.discount?.value ?? 0);
+    const [termsText, setTermsText] = useState<string>(seedPricing?.termsText ?? initialRateCard?.termsText ?? "");
+
+    const [installationIncluded, setInstallationIncluded] = useState(seedPricing?.installation?.included ?? false);
+    const [installationAmount, setInstallationAmount] = useState(seedPricing?.installation?.amount ?? 0);
+    const [installationNote, setInstallationNote] = useState(seedPricing?.installation?.note ?? "");
+    const [transportationIncluded, setTransportationIncluded] = useState(seedPricing?.transportation?.included ?? false);
+    const [transportationAmount, setTransportationAmount] = useState(seedPricing?.transportation?.amount ?? 0);
+    const [transportationNote, setTransportationNote] = useState(seedPricing?.transportation?.note ?? "");
 
     // Metadata
-    const [clientName, setClientName] = useState("");
-    const [clientPhone, setClientPhone] = useState("");
-    const [clientAddress, setClientAddress] = useState("");
-    const [deliveryAddress, setDeliveryAddress] = useState("");
-    const [customerRef, setCustomerRef] = useState("");
+    const [clientName, setClientName] = useState(initialQuotation?.clientName ?? "");
+    const [clientPhone, setClientPhone] = useState(initialQuotation?.clientPhone ?? "");
+    const [clientAddress, setClientAddress] = useState(initialQuotation?.clientAddress ?? "");
+    const [deliveryAddress, setDeliveryAddress] = useState(initialQuotation?.deliveryAddress ?? "");
+    const [customerRef, setCustomerRef] = useState(initialQuotation?.customerRef ?? "");
 
     const installation: CostInclusion = { included: installationIncluded, amount: installationAmount, note: installationNote };
     const transportation: CostInclusion = { included: transportationIncluded, amount: transportationAmount, note: transportationNote };
 
-    const totals = useMemo(() => {
-        if (worksheetId) {
-            const sectionBreakdowns: SectionPricing[] = sectionResults.map((section) => {
-                const inputSection = windowInput?.sections.find((s) => s.id === section.sectionId);
-                const firstDim = inputSection?.dimensions?.[0];
-                const panelsRaw = firstDim?.sections;
-                const isOpenable = typeof panelsRaw === "number" && panelsRaw > 0;
-                const qty = inputSection?.dimensions?.reduce((sum, d) => sum + (d.quantity || 0), 0) || 0;
-                const areaSqFt = inputSection?.dimensions?.reduce(
-                    (sum, d) => sum + ((d.width || 0) * (d.height || 0) * (d.quantity || 0)) / AREA_SQMM_PER_SQFT,
-                    0
-                ) || 0;
+    /** Section breakdowns for worksheet-based sections — priced against the shared per-system rates above. */
+    const buildWorksheetSectionBreakdowns = (): SectionPricing[] =>
+        sectionResults.map((section) => {
+            const inputSection = windowInput?.sections.find((s) => s.id === section.sectionId);
+            const firstDim = inputSection?.dimensions?.[0];
+            const panelsRaw = firstDim?.sections;
+            const isOpenable = typeof panelsRaw === "number" && panelsRaw > 0;
+            const qty = inputSection?.dimensions?.reduce((sum, d) => sum + (d.quantity || 0), 0) || 0;
+            const areaSqFt = inputSection?.dimensions?.reduce(
+                (sum, d) => sum + ((d.width || 0) * (d.height || 0) * (d.quantity || 0)) / AREA_SQMM_PER_SQFT,
+                0
+            ) || 0;
 
-                const typeKey = getSectionTypeKey(section, inputSection?.sectionTypeId);
-                const typeRates = sectionTypeRates[typeKey];
+            const typeKey = getSectionTypeKey(section, inputSection?.sectionTypeId);
+            const typeRates = sectionTypeRates[typeKey];
 
-                // Profile lines — grouped by category, scoped to this section only,
-                // priced using its section-type's shared rate bundle.
-                const sectionProfileQty: RateMap = {};
-                section.materials.forEach((mat) => {
-                    const category = resolveMaterialCategory(mat);
-                    const ft = (mat.stockBreakdown.stocksNeeded * mat.stockBreakdown.stockLength) / 304.8;
-                    sectionProfileQty[category] = (sectionProfileQty[category] || 0) + ft;
-                });
-                const profiles: LineItem[] = Object.entries(sectionProfileQty).map(([category, qtyFt]) => {
-                    const rate = typeRates?.profileRates[category] || 0;
-                    return {
-                        name: MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category,
-                        quantity: qtyFt,
-                        unit: "ft",
-                        rate,
-                        cost: qtyFt * rate,
-                    };
-                });
-
-                const sectionGlassAreaSqFt = section.glassInfo.reduce((sum, g) => sum + g.glassSize.totalArea, 0) / AREA_SQMM_PER_SQFT;
-                const firstGlassSize = section.glassInfo[0]?.glassSize;
-                const glass: LineItem[] = sectionGlassAreaSqFt > 0
-                    ? [{
-                        name: typeRates?.glassType || "Glass",
-                        area: sectionGlassAreaSqFt,
-                        unit: "sqft",
-                        rate: typeRates?.glassRate || 0,
-                        cost: sectionGlassAreaSqFt * (typeRates?.glassRate || 0),
-                        widthMm: firstGlassSize?.width,
-                        heightMm: firstGlassSize?.height,
-                    }]
-                    : [];
-
-                const meshRate = typeRates?.meshRate || 0;
-                const trackCapRate = typeRates?.trackCapRate || 0;
-                const meshName = inputSection?.mosquitoMeshGrade
-                    ? `Mosquito Mesh (${inputSection.mosquitoMeshGrade})`
-                    : "Mosquito Mesh / C-Channel";
-                const meshAreaSqFt = (section.summary?.totalMosquitoArea || 0) / AREA_SQMM_PER_SQFT;
-                const extraHardwareItems: LineItem[] = (extraHardware[section.sectionId] || [])
-                    .filter((item) => item.name.trim())
-                    .map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit, rate: item.rate, cost: item.quantity * item.rate }));
-
-                const accessories: LineItem[] = [
-                    ...(section.accessories.mosquitoCChannel > 0
-                        ? [{ name: meshName, quantity: section.accessories.mosquitoCChannel, unit: "nos", area: meshAreaSqFt || undefined, rate: meshRate, cost: section.accessories.mosquitoCChannel * meshRate }]
-                        : []),
-                    ...(section.accessories.trackCap > 0 ? [{ name: "Track Cap", quantity: section.accessories.trackCap, unit: "nos", rate: trackCapRate, cost: section.accessories.trackCap * trackCapRate }] : []),
-                    ...extraHardwareItems,
-                ];
-
-                const subtotal =
-                    profiles.reduce((s, p) => s + p.cost, 0) +
-                    glass.reduce((s, g) => s + g.cost, 0) +
-                    accessories.reduce((s, a) => s + a.cost, 0);
-
+            const sectionProfileQty: RateMap = {};
+            section.materials.forEach((mat) => {
+                const category = resolveMaterialCategory(mat);
+                const ft = (mat.stockBreakdown.stocksNeeded * mat.stockBreakdown.stockLength) / 304.8;
+                sectionProfileQty[category] = (sectionProfileQty[category] || 0) + ft;
+            });
+            const profiles: LineItem[] = Object.entries(sectionProfileQty).map(([category, qtyFt]) => {
+                const rate = typeRates?.profileRates[category] || 0;
                 return {
-                    sectionId: section.sectionId,
-                    sectionName: section.sectionName,
-                    sectionTypeName: section.sectionTypeName,
-                    configLabel: buildConfigLabel({
-                        sectionTypeName: section.sectionTypeName,
-                        trackType: isOpenable ? "openable" : (inputSection?.trackType || "2-track"),
-                        configuration: inputSection?.configuration || "all-glass",
-                        panels: isOpenable ? (panelsRaw as number) : 2,
-                    }),
-                    trackType: isOpenable ? "openable" : (inputSection?.trackType || "2-track"),
-                    configuration: inputSection?.configuration || "all-glass",
-                    panels: isOpenable ? (panelsRaw as number) : 2,
-                    qty,
-                    areaSqFt,
-                    widthMm: firstDim?.width || 0,
-                    heightMm: firstDim?.height || 0,
-                    profiles,
-                    glass,
-                    accessories,
-                    subtotal,
-                    materialWastagePercent: section.summary?.wastagePercent,
+                    name: MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category,
+                    quantity: qtyFt,
+                    unit: "ft",
+                    rate,
+                    cost: qtyFt * rate,
                 };
             });
 
-            const totalProfileCost = sectionBreakdowns.reduce((sum, s) => sum + s.profiles.reduce((ss, p) => ss + p.cost, 0), 0);
-            const totalGlassAreaSqFt = sectionBreakdowns.reduce((sum, s) => sum + s.glass.reduce((ss, g) => ss + (g.area || 0), 0), 0);
-            const totalGlassCost = sectionBreakdowns.reduce((sum, s) => sum + s.glass.reduce((ss, g) => ss + g.cost, 0), 0);
-            const meshCount = sectionResults.reduce((sum, s) => sum + s.accessories.mosquitoCChannel, 0);
-            const trackCapCount = sectionResults.reduce((sum, s) => sum + s.accessories.trackCap, 0);
-            const totalAccessoryCost = sectionBreakdowns.reduce((sum, s) => sum + s.accessories.reduce((ss, a) => ss + a.cost, 0), 0);
+            const sectionGlassAreaSqFt = section.glassInfo.reduce((sum, g) => sum + g.glassSize.totalArea, 0) / AREA_SQMM_PER_SQFT;
+            const firstGlassSize = section.glassInfo[0]?.glassSize;
+            const glass: LineItem[] = sectionGlassAreaSqFt > 0
+                ? [{
+                    name: typeRates?.glassType || "Glass",
+                    area: sectionGlassAreaSqFt,
+                    unit: "sqft",
+                    rate: typeRates?.glassRate || 0,
+                    cost: sectionGlassAreaSqFt * (typeRates?.glassRate || 0),
+                    widthMm: firstGlassSize?.width,
+                    heightMm: firstGlassSize?.height,
+                }]
+                : [];
 
-            const materialCost = totalProfileCost + totalGlassCost + totalAccessoryCost;
-            const laborCost = laborItemized
-                ? sumLaborItems(laborItems)
-                : calculateLaborCost(
-                    laborMode,
-                    { flatAmount: laborFlatAmount, percent: laborPercent, ratePerSqft: laborRatePerSqft },
-                    { materialCost, totalAreaSqFt: overallAreaSqFt }
-                );
+            const meshRate = typeRates?.meshRate || 0;
+            const trackCapRate = typeRates?.trackCapRate || 0;
+            const meshName = inputSection?.mosquitoMeshGrade
+                ? `Mosquito Mesh (${inputSection.mosquitoMeshGrade})`
+                : "Mosquito Mesh / C-Channel";
+            const meshAreaSqFt = (section.summary?.totalMosquitoArea || 0) / AREA_SQMM_PER_SQFT;
+            const extraHardwareItems: LineItem[] = (extraHardware[section.sectionId] || [])
+                .filter((item) => item.name.trim())
+                .map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit, rate: item.rate, cost: item.quantity * item.rate }));
 
-            const computed = computeTotals({
-                materialCost,
-                laborCost,
-                overheadCost: Number(overheadCost),
-                installation,
-                transportation,
-                discountType,
-                discountValue,
-                profitMarginPercent: profitMargin,
-                taxRatePercent: taxRate,
-            });
+            const accessories: LineItem[] = [
+                ...(section.accessories.mosquitoCChannel > 0
+                    ? [{ name: meshName, quantity: section.accessories.mosquitoCChannel, unit: "nos", area: meshAreaSqFt || undefined, rate: meshRate, cost: section.accessories.mosquitoCChannel * meshRate }]
+                    : []),
+                ...(section.accessories.trackCap > 0 ? [{ name: "Track Cap", quantity: section.accessories.trackCap, unit: "nos", rate: trackCapRate, cost: section.accessories.trackCap * trackCapRate }] : []),
+                ...extraHardwareItems,
+            ];
+
+            const subtotal =
+                profiles.reduce((s, p) => s + p.cost, 0) +
+                glass.reduce((s, g) => s + g.cost, 0) +
+                accessories.reduce((s, a) => s + a.cost, 0);
 
             return {
-                sectionBreakdowns,
-                totalProfileCost,
-                totalGlassAreaSqFt,
-                overallAreaSqFt,
-                totalGlassCost,
-                meshCount,
-                trackCapCount,
-                totalAccessoryCost,
-                itemsCost: 0,
-                laborCost,
-                ...computed,
+                sectionId: section.sectionId,
+                sectionName: section.sectionName,
+                sectionTypeName: section.sectionTypeName,
+                configLabel: buildConfigLabel({
+                    sectionTypeName: section.sectionTypeName,
+                    trackType: isOpenable ? "openable" : (inputSection?.trackType || "2-track"),
+                    configuration: inputSection?.configuration || "all-glass",
+                    panels: isOpenable ? (panelsRaw as number) : 2,
+                }),
+                trackType: isOpenable ? "openable" : (inputSection?.trackType || "2-track"),
+                configuration: inputSection?.configuration || "all-glass",
+                panels: isOpenable ? (panelsRaw as number) : 2,
+                qty,
+                areaSqFt,
+                widthMm: firstDim?.width || 0,
+                heightMm: firstDim?.height || 0,
+                profiles,
+                glass,
+                accessories,
+                subtotal,
+                materialWastagePercent: section.summary?.wastagePercent,
             };
-        }
+        });
 
-        // Direct-entry mode — only flat labor makes sense (no material cost/area basis)
-        const itemsCost = freeformItems.reduce((sum, item) => sum + item.quantity * item.rate, 0);
+    /** Section breakdowns for manual sections — plain area × rate, no stock-optimization engine involved. */
+    const buildManualSectionBreakdowns = (): SectionPricing[] =>
+        manualSections.map((section) => {
+            const areaSqFt = section.width && section.height && section.quantity
+                ? (section.width * section.height * section.quantity) / AREA_SQMM_PER_SQFT
+                : 0;
+
+            const profiles: LineItem[] = section.frameRatePerSqft > 0 && areaSqFt > 0
+                ? [{ name: "Frame & Fabrication", area: areaSqFt, unit: "sqft", rate: section.frameRatePerSqft, cost: areaSqFt * section.frameRatePerSqft }]
+                : [];
+
+            const glass: LineItem[] = areaSqFt > 0
+                ? [{
+                    name: section.glassType || "Glass",
+                    area: areaSqFt,
+                    unit: "sqft",
+                    rate: section.glassRate,
+                    cost: areaSqFt * section.glassRate,
+                    widthMm: section.width ?? undefined,
+                    heightMm: section.height ?? undefined,
+                }]
+                : [];
+
+            const accessories: LineItem[] = (extraHardware[section.id] || [])
+                .filter((item) => item.name.trim())
+                .map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit, rate: item.rate, cost: item.quantity * item.rate }));
+
+            const subtotal =
+                profiles.reduce((s, p) => s + p.cost, 0) +
+                glass.reduce((s, g) => s + g.cost, 0) +
+                accessories.reduce((s, a) => s + a.cost, 0);
+
+            return {
+                sectionId: section.id,
+                sectionName: section.name,
+                configLabel: buildConfigLabel({
+                    trackType: section.trackType,
+                    configuration: section.configuration,
+                    panels: 2,
+                }),
+                trackType: section.trackType,
+                configuration: section.configuration,
+                panels: 2,
+                qty: section.quantity || 0,
+                areaSqFt,
+                widthMm: section.width || 0,
+                heightMm: section.height || 0,
+                profiles,
+                glass,
+                accessories,
+                subtotal,
+            };
+        });
+
+    const totals = useMemo(() => {
+        const sectionBreakdowns: SectionPricing[] = worksheetId
+            ? buildWorksheetSectionBreakdowns()
+            : buildManualSectionBreakdowns();
+
+        const totalProfileCost = sectionBreakdowns.reduce((sum, s) => sum + s.profiles.reduce((ss, p) => ss + p.cost, 0), 0);
+        const totalGlassAreaSqFt = sectionBreakdowns.reduce((sum, s) => sum + s.glass.reduce((ss, g) => ss + (g.area || 0), 0), 0);
+        const totalGlassCost = sectionBreakdowns.reduce((sum, s) => sum + s.glass.reduce((ss, g) => ss + g.cost, 0), 0);
+        const meshCount = sectionResults.reduce((sum, s) => sum + s.accessories.mosquitoCChannel, 0);
+        const trackCapCount = sectionResults.reduce((sum, s) => sum + s.accessories.trackCap, 0);
+        const totalAccessoryCost = sectionBreakdowns.reduce((sum, s) => sum + s.accessories.reduce((ss, a) => ss + a.cost, 0), 0);
+
+        const materialCost = totalProfileCost + totalGlassCost + totalAccessoryCost;
         const laborCost = laborItemized
             ? sumLaborItems(laborItems)
             : calculateLaborCost(
-                "flat",
+                laborMode,
                 { flatAmount: laborFlatAmount, percent: laborPercent, ratePerSqft: laborRatePerSqft },
-                { materialCost: itemsCost, totalAreaSqFt: 0 }
+                { materialCost, totalAreaSqFt: overallAreaSqFt }
             );
 
         const computed = computeTotals({
-            materialCost: itemsCost,
+            materialCost,
             laborCost,
             overheadCost: Number(overheadCost),
             installation,
@@ -412,25 +525,25 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         });
 
         return {
-            sectionBreakdowns: [] as SectionPricing[],
-            totalProfileCost: 0,
-            totalGlassAreaSqFt: 0,
-            overallAreaSqFt: 0,
-            totalGlassCost: 0,
-            meshCount: 0,
-            trackCapCount: 0,
-            totalAccessoryCost: 0,
-            itemsCost,
+            sectionBreakdowns,
+            totalProfileCost,
+            totalGlassAreaSqFt,
+            overallAreaSqFt,
+            totalGlassCost,
+            meshCount,
+            trackCapCount,
+            totalAccessoryCost,
             laborCost,
             ...computed,
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         worksheetId,
         sectionResults,
         windowInput,
         sectionTypeRates,
+        manualSections,
         extraHardware,
-        freeformItems,
         laborMode,
         laborFlatAmount,
         laborPercent,
@@ -447,16 +560,21 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         transportation,
     ]);
 
-    const addFreeformItem = () => {
-        setFreeformItems([...freeformItems, { id: crypto.randomUUID(), name: "", quantity: 1, unit: "nos", rate: 0 }]);
+    const addManualSection = () => {
+        setManualSections([...manualSections, createEmptyManualSection(rateCard)]);
     };
 
-    const updateFreeformItem = (id: string, updates: Partial<FreeformItem>) => {
-        setFreeformItems(freeformItems.map((item) => (item.id === id ? { ...item, ...updates } : item)));
+    const updateManualSection = (id: string, updates: Partial<ManualSection>) => {
+        setManualSections(manualSections.map((s) => (s.id === id ? { ...s, ...updates } : s)));
     };
 
-    const removeFreeformItem = (id: string) => {
-        setFreeformItems(freeformItems.filter((item) => item.id !== id));
+    const removeManualSection = (id: string) => {
+        setManualSections(manualSections.filter((s) => s.id !== id));
+        setExtraHardware((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
     };
 
     const addHardwareItem = (sectionId: string) => {
@@ -500,46 +618,31 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         setLaborItems(laborItems.filter((_, idx) => idx !== index));
     };
 
-    const handleSave = async () => {
-        setSaving(true);
+    const handleSave = async (mode: "draft" | "final") => {
+        setSaving(mode);
         try {
             const laborBreakdown = laborItemized
                 ? { mode: "itemized" as const, items: laborItems.filter((item) => item.name.trim()) }
                 : { mode: laborMode, percent: laborPercent, ratePerSqft: laborRatePerSqft };
 
-            const pricingData = worksheetId
-                ? {
-                    sections: totals.sectionBreakdowns,
-                    labor: totals.laborCost,
-                    laborBreakdown,
-                    overhead: overheadCost,
-                    installation,
-                    transportation,
-                    discount: { type: discountType, value: discountValue, amount: totals.discountAmount },
-                    profitMargin,
-                    taxRate,
-                    taxType,
-                    termsText,
-                }
-                : {
-                    profiles: [],
-                    glass: [],
-                    accessories: freeformItems
-                        .filter((item) => item.name.trim())
-                        .map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit, rate: item.rate, cost: item.quantity * item.rate })),
-                    labor: totals.laborCost,
-                    laborBreakdown,
-                    overhead: overheadCost,
-                    installation,
-                    transportation,
-                    discount: { type: discountType, value: discountValue, amount: totals.discountAmount },
-                    profitMargin,
-                    taxRate,
-                    taxType,
-                    termsText,
-                };
+            const pricingData = {
+                sections: totals.sectionBreakdowns,
+                profiles: [],
+                glass: [],
+                accessories: [],
+                labor: totals.laborCost,
+                laborBreakdown,
+                overhead: overheadCost,
+                installation,
+                transportation,
+                discount: { type: discountType, value: discountValue, amount: totals.discountAmount },
+                profitMargin,
+                taxRate,
+                taxType,
+                termsText,
+            };
 
-            const res = await createQuotation({
+            const input = {
                 worksheetId,
                 clientName,
                 clientPhone,
@@ -548,39 +651,63 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 customerRef,
                 pricingData,
                 totalAmount: totals.finalTotal,
-            });
+            };
 
-            if (res.success) {
-                toast("Quotation created.");
-                router.push(`/quotations/${res.id}`);
-            } else {
+            const res = quotationId
+                ? await updateQuotation(quotationId, input)
+                : await createQuotation(input);
+
+            if (!res.success || !res.id) {
                 toast("Failed to save: " + res.error, "error");
+                return;
+            }
+
+            if (mode === "final") {
+                toast(quotationId ? "Quotation updated." : "Quotation created.");
+                router.push(`/quotations/${res.id}`);
+                return;
+            }
+
+            toast("Saved as draft.");
+            if (!quotationId) {
+                // Transition a fresh create into edit mode for the row we just made,
+                // so continued edits save-in-place instead of creating duplicates.
+                setQuotationId(res.id);
+                router.replace(`/quotations/create?editId=${res.id}`);
+            } else {
+                router.refresh();
             }
         } finally {
-            setSaving(false);
+            setSaving(null);
         }
     };
 
     return (
-        <div className="min-h-screen bg-surface-muted p-6 md:p-8 font-sans">
+        <div className="min-h-screen bg-surface-muted p-4 sm:p-6 lg:p-8 font-sans">
             <datalist id="hardware-rate-suggestions">
                 {Object.keys(rateCard?.hardwareRates || {}).map((name) => (
                     <option key={name} value={name} />
                 ))}
             </datalist>
-            <div className="max-w-4xl mx-auto space-y-6">
-                <div className="flex items-center justify-between">
+            <div className="w-full space-y-6">
+                <div className="flex items-center justify-between gap-4">
                     <Link href="/dashboard">
                         <Button variant="ghost">
                             <ArrowLeft className="w-4 h-4 mr-2" />
                             Back
                         </Button>
                     </Link>
-                    <h1 className="text-2xl font-bold text-text">Create Quotation</h1>
-                    <Button onClick={handleSave} isLoading={saving}>
-                        <Save className="w-4 h-4 mr-2" />
-                        Generate Quote
-                    </Button>
+                    <h1 className="text-2xl font-bold text-text">{isEditMode ? "Edit Quotation" : "Create Quotation"}</h1>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={() => handleSave("draft")} isLoading={saving === "draft"} disabled={saving !== null}>
+                            <FileText className="w-4 h-4 mr-2" />
+                            Save as Draft
+                        </Button>
+                        <Button onClick={() => handleSave("final")} isLoading={saving === "final"} disabled={saving !== null}>
+                            <Save className="w-4 h-4 mr-2" />
+                            {isEditMode ? "Save & View" : "Generate Quote"}
+                        </Button>
+                    </div>
                 </div>
 
                 {!rateCard && (
@@ -593,12 +720,12 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-2 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="md:col-span-3 space-y-6">
                         {/* Client Details */}
                         <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-4">
                             <h2 className="font-semibold text-lg text-text border-b pb-2">Client Details</h2>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
                                     <Label>Client Name</Label>
                                     <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Type name..." />
@@ -615,7 +742,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                     <Label>Bill To Address</Label>
                                     <Input value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} placeholder="Optional" />
                                 </div>
-                                <div className="col-span-2">
+                                <div className="sm:col-span-2 lg:col-span-2">
                                     <Label>Deliver To Address</Label>
                                     <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Same as Bill To if left blank" />
                                 </div>
@@ -641,7 +768,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                             </div>
 
                                             {/* Frame/Shutter/Interlock/Track Rail/Mullion + hardware, all in one dense grid */}
-                                            <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
                                                 {Object.keys(typeRate.profileRates).map((category) => (
                                                     <div key={category}>
                                                         <Label className="text-[11px] mb-0.5 leading-tight">{MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category} (₹/ft)</Label>
@@ -818,53 +945,44 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                 </div>
                             </>
                         ) : (
-                            /* Direct-entry line items */
-                            <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-4">
-                                <div className="flex items-center justify-between border-b pb-2">
-                                    <h2 className="font-semibold text-lg text-text">Line Items</h2>
-                                    <Button type="button" size="sm" variant="outline" onClick={addFreeformItem}>
-                                        <Plus className="w-4 h-4 mr-1" /> Add Item
-                                    </Button>
-                                </div>
-                                <div className="space-y-2">
-                                    {freeformItems.map((item) => (
-                                        <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                                            <div className="col-span-5">
-                                                <Input
-                                                    placeholder="Item name"
-                                                    value={item.name}
-                                                    onChange={(e) => updateFreeformItem(item.id, { name: e.target.value })}
-                                                />
-                                            </div>
-                                            <div className="col-span-2">
-                                                <Input
-                                                    type="number"
-                                                    placeholder="Qty"
-                                                    value={item.quantity || ""}
-                                                    onChange={(e) => updateFreeformItem(item.id, { quantity: parseFloat(e.target.value) || 0 })}
-                                                />
-                                            </div>
-                                            <div className="col-span-2">
-                                                <Input
-                                                    placeholder="Unit"
-                                                    value={item.unit}
-                                                    onChange={(e) => updateFreeformItem(item.id, { unit: e.target.value })}
-                                                />
-                                            </div>
-                                            <div className="col-span-2">
-                                                <Input
-                                                    type="number"
-                                                    placeholder="Rate"
-                                                    value={item.rate || ""}
-                                                    onChange={(e) => updateFreeformItem(item.id, { rate: parseFloat(e.target.value) || 0 })}
-                                                />
-                                            </div>
-                                            <button type="button" onClick={() => removeFreeformItem(item.id)} className="col-span-1 text-text-muted hover:text-danger">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                            /* Manual section builder — dimensions, track/config, glass rate, and
+                               a live diagram per section, priced by area × rate. */
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="font-semibold text-lg text-text">Window Sections</h2>
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex gap-1 bg-surface border border-border rounded-lg p-1">
+                                            {(["mm", "ft"] as const).map((u) => (
+                                                <button
+                                                    key={u}
+                                                    type="button"
+                                                    onClick={() => setManualUnitMode(u)}
+                                                    className={`px-2.5 py-1 rounded-md text-xs font-medium ${manualUnitMode === u ? "bg-text text-surface" : "text-text-muted hover:text-text"}`}
+                                                >
+                                                    {u}
+                                                </button>
+                                            ))}
                                         </div>
-                                    ))}
+                                        <Button type="button" size="sm" variant="outline" onClick={addManualSection}>
+                                            <Plus className="w-4 h-4 mr-1" /> Add Section
+                                        </Button>
+                                    </div>
                                 </div>
+                                {manualSections.map((section) => (
+                                    <ManualSectionForm
+                                        key={section.id}
+                                        section={section}
+                                        unitMode={manualUnitMode}
+                                        glassRates={rateCard?.glassRates || {}}
+                                        canRemove={manualSections.length > 1}
+                                        onUpdate={(updates) => updateManualSection(section.id, updates)}
+                                        onRemove={() => removeManualSection(section.id)}
+                                        hardwareItems={(extraHardware[section.id] || []) as ManualHardwareItem[]}
+                                        onAddHardware={() => addHardwareItem(section.id)}
+                                        onUpdateHardware={(itemId, updates) => updateHardwareItem(section.id, itemId, updates)}
+                                        onRemoveHardware={(itemId) => removeHardwareItem(section.id, itemId)}
+                                    />
+                                ))}
                             </div>
                         )}
 
@@ -1038,27 +1156,18 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                             <p className="text-xs text-text-inverse/50 -mt-4">Internal figures — this breakdown is never shown to the customer.</p>
 
                             <div className="space-y-4 text-sm">
-                                {worksheetId ? (
-                                    <>
-                                        <div className="flex justify-between">
-                                            <span className="text-text-inverse/70">Profiles Cost</span>
-                                            <span>{formatCurrency(totals.totalProfileCost)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-text-inverse/70">Glass Cost</span>
-                                            <span>{formatCurrency(totals.totalGlassCost)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-text-inverse/70">Accessories</span>
-                                            <span>{formatCurrency(totals.totalAccessoryCost)}</span>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="flex justify-between">
-                                        <span className="text-text-inverse/70">Line Items</span>
-                                        <span>{formatCurrency(totals.itemsCost || 0)}</span>
-                                    </div>
-                                )}
+                                <div className="flex justify-between">
+                                    <span className="text-text-inverse/70">Profiles Cost</span>
+                                    <span>{formatCurrency(totals.totalProfileCost)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-text-inverse/70">Glass Cost</span>
+                                    <span>{formatCurrency(totals.totalGlassCost)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-text-inverse/70">Accessories</span>
+                                    <span>{formatCurrency(totals.totalAccessoryCost)}</span>
+                                </div>
                                 <div className="flex justify-between">
                                     <span className="text-text-inverse/70">Labor & Overhead</span>
                                     <span>{formatCurrency(totals.laborCost + Number(overheadCost))}</span>

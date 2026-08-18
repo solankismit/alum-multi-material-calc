@@ -4,13 +4,13 @@ import Link from "next/link";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { getQuotation } from "../actions";
 import { formatCurrency, AREA_SQMM_PER_SQFT } from "@/utils/formatters";
-import ClientPrintButton from "@/app/worksheets/orderbook/ClientPrintButton";
+import QuotationPrintButton from "./QuotationPrintButton";
 import QuotationHeaderActions from "./QuotationHeaderActions";
 import QuotationStatusActions from "./QuotationStatusActions";
 import WindowSchematic from "@/components/WindowSchematic";
 import PrintStyles from "@/components/PrintStyles";
 import { Eye, EyeOff } from "lucide-react";
-import { splitTax, DEFAULT_TAX_TYPE, type PricingData } from "@/utils/quotationPricing";
+import { splitTax, isQuotationLocked, DEFAULT_TAX_TYPE, type PricingData } from "@/utils/quotationPricing";
 import type { WindowInput } from "@/types";
 
 interface PageProps {
@@ -38,6 +38,7 @@ export default async function QuotationView({ params, searchParams }: PageProps)
     }
 
     const quote = res.data;
+    const locked = isQuotationLocked(quote);
     const pricing = quote.pricingData as unknown as PricingData;
     const taxType = pricing.taxType ?? DEFAULT_TAX_TYPE;
 
@@ -142,12 +143,18 @@ export default async function QuotationView({ params, searchParams }: PageProps)
 
                 {/* Header Actions (Hidden continuously in print) */}
                 <div className="print:hidden flex justify-between items-center mb-8">
-                    <QuotationHeaderActions id={quote.id} worksheetId={quote.worksheetId} />
+                    <QuotationHeaderActions id={quote.id} worksheetId={quote.worksheetId} locked={locked} />
                     <div className="flex items-center gap-3">
                         <QuotationStatusActions id={quote.id} status={quote.status} />
-                        <ClientPrintButton label="Print / Save PDF" />
+                        <QuotationPrintButton id={quote.id} label="Print / Save PDF" />
                     </div>
                 </div>
+
+                {locked && (
+                    <div className="print:hidden mb-6 bg-surface-muted border border-border text-text-muted text-xs font-medium rounded-lg px-3 py-2">
+                        This quotation has been {quote.printedAt ? "printed" : "sent"} and can no longer be edited directly — use Duplicate to make changes.
+                    </div>
+                )}
 
                 {isInternal && (
                     <div className="print:hidden mb-6 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium rounded-lg px-3 py-2">

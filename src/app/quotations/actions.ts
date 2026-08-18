@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import type { QuotationStatus } from "@prisma/client";
+import { isQuotationLocked } from "@/utils/quotationPricing";
 
 export interface QuotationInput {
     worksheetId?: string | null;
@@ -67,6 +68,82 @@ export async function createQuotation(input: QuotationInput) {
     } catch (error) {
         console.error("Create Quotation Error:", error);
         return { success: false, error: "Failed to create quotation" };
+    }
+}
+
+/** Re-saves an existing (not-yet-locked) quotation with new pricing/client data. */
+export async function updateQuotation(id: string, input: QuotationInput) {
+    try {
+        const session = await getSession();
+        if (!session?.userId) {
+            return { success: false, error: "Unauthorized" };
+        }
+        const userId = session.userId as string;
+
+        const existing = await db.quotation.findUnique({ where: { id } });
+        if (!existing || existing.userId !== userId) {
+            return { success: false, error: "Not found or access denied" };
+        }
+        // Re-check server-side — the edit page also gates on this, but never
+        // trust the client to enforce a lock.
+        if (isQuotationLocked(existing)) {
+            return { success: false, error: "This quotation has already been sent or printed and can no longer be edited. Duplicate it to make changes." };
+        }
+
+        if (input.worksheetId) {
+            const worksheet = await db.worksheet.findFirst({
+                where: { id: input.worksheetId, userId },
+            });
+            if (!worksheet) {
+                return { success: false, error: "Worksheet not found or access denied" };
+            }
+        }
+
+        await db.quotation.update({
+            where: { id },
+            data: {
+                worksheetId: input.worksheetId || null,
+                clientName: input.clientName,
+                clientPhone: input.clientPhone,
+                clientAddress: input.clientAddress,
+                deliveryAddress: input.deliveryAddress,
+                customerRef: input.customerRef,
+                pricingData: input.pricingData as never,
+                totalAmount: input.totalAmount,
+            },
+        });
+
+        revalidatePath("/quotations");
+        revalidatePath(`/quotations/${id}`);
+        return { success: true, id, quotationNumber: existing.quotationNumber };
+    } catch (error) {
+        console.error("Update Quotation Error:", error);
+        return { success: false, error: "Failed to update quotation" };
+    }
+}
+
+/** Marks a quotation as printed (idempotent) — this is what locks it from further edits. */
+export async function markQuotationPrinted(id: string) {
+    try {
+        const session = await getSession();
+        if (!session?.userId) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const existing = await db.quotation.findUnique({ where: { id } });
+        if (!existing || existing.userId !== session.userId) {
+            return { success: false, error: "Not found or access denied" };
+        }
+
+        if (!existing.printedAt) {
+            await db.quotation.update({ where: { id }, data: { printedAt: new Date() } });
+            revalidatePath(`/quotations/${id}`);
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error("Mark Quotation Printed Error:", error);
+        return { success: false, error: "Failed to update quotation" };
     }
 }
 

@@ -79,6 +79,16 @@ export function sumLaborItems(items: LaborItem[]): number {
   return items.reduce((sum, item) => sum + (item.amount || 0), 0);
 }
 
+/**
+ * A quotation becomes uneditable the moment it's printed, or the moment its
+ * status moves past DRAFT (e.g. "Mark as Sent") — whichever happens first.
+ * Until either happens, it stays editable in place. The only way back into
+ * an already-locked quotation is Duplicate (creates a fresh unlocked Draft).
+ */
+export function isQuotationLocked(quotation: { printedAt: Date | string | null; status: string }): boolean {
+  return quotation.printedAt !== null || quotation.status !== "DRAFT";
+}
+
 /** Splits a single computed tax amount into CGST/SGST (intra-state) or IGST (inter-state) for display — the underlying rate/amount is unchanged, only how it's broken out. */
 export function splitTax(taxAmount: number, taxType: TaxType | undefined): { cgst: number; sgst: number; igst: number } {
   if (taxType === "IGST") {
