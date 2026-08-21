@@ -15,6 +15,25 @@ interface OrderbookParams {
     searchParams: Promise<{ ids?: string }>;
 }
 
+/** Shared empty/error state for the two "nothing to show" branches below —
+ * previously bare centered text with no way back except the browser's own
+ * back button. */
+function OrderbookEmptyState({ message }: { message: string }) {
+    return (
+        <div className="min-h-screen bg-surface-muted flex items-center justify-center p-8">
+            <div className="text-center max-w-sm">
+                <p className="text-text-muted mb-4">{message}</p>
+                <Link href="/dashboard">
+                    <Button variant="outline">
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Back to Dashboard
+                    </Button>
+                </Link>
+            </div>
+        </div>
+    );
+}
+
 type StockCategory = "Frame" | "Shutter" | "Interlock" | "Other";
 
 interface StockAggregation {
@@ -60,7 +79,7 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
     if (!session?.userId) return redirect("/login");
 
     const { ids } = await searchParams;
-    if (!ids) return <div className="p-8 text-center text-danger">No worksheets selected. Go back and select at least one worksheet.</div>;
+    if (!ids) return <OrderbookEmptyState message="No worksheets selected. Go back and select at least one worksheet." />;
 
     const worksheetIds = ids.split(",").filter(Boolean);
 
@@ -71,7 +90,7 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
         },
     });
 
-    if (worksheets.length === 0) return <div className="p-8 text-center text-text-muted">No worksheets found for the given selection.</div>;
+    if (worksheets.length === 0) return <OrderbookEmptyState message="No worksheets found for the given selection." />;
 
     // --- Aggregation Logic ---
 
@@ -221,7 +240,7 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
         <div className="min-h-screen bg-surface-muted p-4 md:p-8 font-sans print:bg-white print:p-0">
             <div className="max-w-5xl mx-auto space-y-6 md:space-y-8" id="printable-area">
                 {/* Header Actions */}
-                <div className="flex justify-between items-center print:hidden">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
                     <Link href="/dashboard">
                         <Button variant="ghost" className="text-slate-600 hover:text-slate-900 border border-slate-200 bg-white">
                             <ArrowLeft className="w-4 h-4 mr-2" />

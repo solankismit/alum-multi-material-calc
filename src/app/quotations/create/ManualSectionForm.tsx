@@ -4,6 +4,7 @@ import { Trash2, Plus } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { useState } from "react";
 import WindowSchematic from "@/components/WindowSchematic";
@@ -75,6 +76,7 @@ export default function ManualSectionForm({
     const displayValue = (mm: number | null) => (mm === null ? "" : unitMode === "ft" ? mmToFeet(mm) : mm);
 
     const [detailsOpen, setDetailsOpen] = useState(false);
+    const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
 
     const handleDimensionChange = (field: "height" | "width", value: string) => {
         if (value === "") {
@@ -114,7 +116,7 @@ export default function ManualSectionForm({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        onClick={onRemove}
+                        onClick={() => setConfirmRemoveOpen(true)}
                         className="text-text-muted hover:text-danger hover:bg-danger-surface mt-5"
                         aria-label="Remove section"
                     >
@@ -122,6 +124,19 @@ export default function ManualSectionForm({
                     </Button>
                 )}
             </div>
+
+            <ConfirmDialog
+                open={confirmRemoveOpen}
+                onOpenChange={setConfirmRemoveOpen}
+                title={`Remove ${section.name || "this section"}?`}
+                description="This deletes its dimensions, hardware, and spec details. This can't be undone."
+                confirmLabel="Remove section"
+                variant="danger"
+                onConfirm={() => {
+                    setConfirmRemoveOpen(false);
+                    onRemove();
+                }}
+            />
 
             <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-4">

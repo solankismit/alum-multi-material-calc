@@ -81,6 +81,12 @@ export default function CuttingPlanDocument({
                                     )}
                                 </div>
 
+                                {MATERIAL_CATEGORIES.every((category) => secResult.materials.filter((m) => resolveMaterialCategory(m) === category).length === 0) && (
+                                    <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed">
+                                        No cutting plan data for this section.
+                                    </div>
+                                )}
+
                                 {MATERIAL_CATEGORIES.map((category) => {
                                     const categoryMaterials = secResult.materials.filter((m) => resolveMaterialCategory(m) === category);
                                     if (categoryMaterials.length === 0) return null;

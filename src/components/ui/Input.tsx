@@ -17,7 +17,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
                 {label && (
                     <label
                         htmlFor={inputId}
-                        className={`block text-sm font-medium leading-6 text-gray-900 mb-1 ${labelClassName}`}
+                        className={`block text-sm font-medium leading-6 text-text mb-1 ${labelClassName}`}
                     >
                         {label}
                     </label>
@@ -27,13 +27,13 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
                     id={inputId}
                     name={inputId}
                     className={cn(
-                        "flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+                        "flex h-10 w-full items-center justify-between rounded-md border border-border bg-surface px-3 py-2 text-sm ring-offset-surface placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
                         className
                     )}
                     ref={ref}
                     {...props}
                 />
-                {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+                {error && <p className="mt-1 text-sm text-danger">{error}</p>}
             </div>
         );
     }

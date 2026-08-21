@@ -1308,7 +1308,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                         running total is visible near the top instead of after the
                         entire (often long) form. */}
                     <div className="md:col-span-1 order-first md:order-none">
-                        <div className="bg-surface-inverse text-text-inverse p-6 rounded-xl shadow-lg sticky top-6 space-y-6">
+                        <div className="bg-surface-inverse text-text-inverse p-6 rounded-xl shadow-lg sticky top-20 space-y-6">
                             <h2 className="text-xl font-bold text-text-inverse border-b border-white/20 pb-2">Estimated Total</h2>
                             <p className="text-xs text-text-inverse/50 -mt-4">Internal figures — this breakdown is never shown to the customer.</p>
 

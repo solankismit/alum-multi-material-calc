@@ -175,7 +175,7 @@ export default function WorksheetReport({
                                 {/* A. Section Glass Order */}
                                 <section className="print:break-inside-avoid">
                                     <h4 className="font-bold text-slate-700 mb-4 px-2 border-l-2 border-blue-400">Glass Order List</h4>
-                                    <div className="overflow-hidden border border-slate-200 rounded-lg">
+                                    <div className="overflow-x-auto border border-slate-200 rounded-lg print:overflow-visible">
                                         <table className="w-full text-sm">
                                             <thead className="bg-slate-100 text-slate-700 font-semibold text-left">
                                                 <tr>

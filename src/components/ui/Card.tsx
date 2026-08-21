@@ -1,4 +1,5 @@
 import * as React from "react";
+import { uiStyles } from "@/lib/utils";
 
 const Card = React.forwardRef<
     HTMLDivElement,
@@ -6,7 +7,7 @@ const Card = React.forwardRef<
 >(({ className = "", ...props }, ref) => (
     <div
         ref={ref}
-        className={`rounded-lg  bg-white text-gray-950 shadow-sm ${className}`}
+        className={`${uiStyles.card} text-text ${className}`}
         {...props}
     />
 ));
@@ -42,7 +43,7 @@ const CardDescription = React.forwardRef<
 >(({ className = "", ...props }, ref) => (
     <p
         ref={ref}
-        className={`text-sm text-gray-500 ${className}`}
+        className={`text-sm text-text-muted ${className}`}
         {...props}
     />
 ));

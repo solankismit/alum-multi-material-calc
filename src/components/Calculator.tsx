@@ -158,7 +158,7 @@ export default function Calculator({ initialInput }: CalculatorProps) {
                 {/* Right column's grid space is always reserved (not just once a
                     result exists) so the layout doesn't jump from 1 to 2 columns
                     on first calculate. */}
-                <div className="lg:col-span-1 lg:sticky lg:top-4 lg:self-start space-y-4">
+                <div className="lg:col-span-1 lg:sticky lg:top-20 lg:self-start space-y-4">
                     {result ? (
                         <>
                             <div className="bg-surface p-4 rounded-lg shadow-sm flex flex-wrap items-center justify-between gap-4 transition-all duration-200">

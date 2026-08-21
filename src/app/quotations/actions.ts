@@ -17,13 +17,57 @@ export interface QuotationInput {
     totalAmount: number;
 }
 
-/** Validates pricingData against the shared schema; returns a parsed, typed value on success. */
+/** Human-readable labels for the pricing schema's field names — used to turn a
+ * raw Zod path like `sections.0.glass.rate` into "Section 1 → Glass → rate"
+ * instead of exposing the internal field names to the user. */
+const PRICING_FIELD_LABELS: Record<string, string> = {
+    sections: "Section",
+    glass: "Glass",
+    frame: "Frame",
+    mesh: "Mesh",
+    hardware: "Hardware item",
+    hardwareItems: "Hardware item",
+    labor: "Labor",
+    labour: "Labor",
+    laborItems: "Labor item",
+    tax: "Tax",
+    discount: "Discount",
+    profitMargin: "Profit margin",
+    overhead: "Overhead",
+    installation: "Installation",
+    transportation: "Transportation",
+    rate: "rate",
+    quantity: "quantity",
+    name: "name",
+    height: "height",
+    width: "width",
+};
+
+function friendlyPricingPathSegment(segment: PropertyKey): string {
+    if (typeof segment === "number") return `#${segment + 1}`;
+    const key = String(segment);
+    return PRICING_FIELD_LABELS[key] ?? key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+}
+
+function friendlyPricingIssueDetail(issue: { code: string; expected?: unknown; received?: unknown; minimum?: unknown; maximum?: unknown; message: string }): string {
+    if (issue.code === "invalid_type") {
+        if (issue.received === "nan" || issue.received === "undefined") return "enter a valid number";
+        return `expected ${String(issue.expected)}, got ${String(issue.received)}`;
+    }
+    if (issue.code === "too_small") return `must be at least ${String(issue.minimum)}`;
+    if (issue.code === "too_big") return `must be at most ${String(issue.maximum)}`;
+    return issue.message;
+}
+
+/** Validates pricingData against the shared schema; returns a parsed, typed
+ * value on success, or a plain-language (not raw Zod path/message) error. */
 function parsePricingData(pricingData: unknown) {
     const result = pricingDataSchema.safeParse(pricingData);
     if (!result.success) {
-        const message = result.error.issues[0]
-            ? `${result.error.issues[0].path.join(".")}: ${result.error.issues[0].message}`
-            : "Invalid pricing data";
+        const issue = result.error.issues[0];
+        const message = issue
+            ? `${issue.path.map(friendlyPricingPathSegment).join(" → ") || "Pricing details"}: ${friendlyPricingIssueDetail(issue)}.`
+            : "Some pricing details look invalid. Please review the form and try again.";
         return { success: false as const, error: message };
     }
     return { success: true as const, data: result.data };
@@ -60,7 +104,7 @@ export async function createQuotation(input: QuotationInput) {
 
         const parsed = parsePricingData(input.pricingData);
         if (!parsed.success) {
-            return { success: false, error: `Invalid pricing data: ${parsed.error}` };
+            return { success: false, error: `Invalid pricing data — ${parsed.error}` };
         }
 
         const quotationNumber = await nextQuotationNumber(userId);
@@ -118,7 +162,7 @@ export async function updateQuotation(id: string, input: QuotationInput) {
 
         const parsed = parsePricingData(input.pricingData);
         if (!parsed.success) {
-            return { success: false, error: `Invalid pricing data: ${parsed.error}` };
+            return { success: false, error: `Invalid pricing data — ${parsed.error}` };
         }
 
         await db.quotation.update({

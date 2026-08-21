@@ -75,6 +75,14 @@ export default function WindowsListDocument({ worksheetId, worksheetName, create
                         <p className="text-slate-400 text-xs mt-1">For design confirmation — no pricing shown</p>
                     </div>
 
+                    {totalQty === 0 && (
+                        <div className="p-6 md:p-8">
+                            <div className="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed">
+                                No windows configured for this worksheet.
+                            </div>
+                        </div>
+                    )}
+
                     <div className="p-6 md:p-8 print:p-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-3 gap-6">
                         {input.sections.map((section) => {
                             const firstDim = section.dimensions?.[0];
