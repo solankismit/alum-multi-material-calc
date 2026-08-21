@@ -8,6 +8,7 @@ import QuotationPrintButton from "./QuotationPrintButton";
 import QuotationHeaderActions from "./QuotationHeaderActions";
 import QuotationStatusActions from "./QuotationStatusActions";
 import WindowSchematic from "@/components/WindowSchematic";
+import WhatsAppShareButton from "@/components/WhatsAppShareButton";
 import PrintStyles from "@/components/PrintStyles";
 import { Eye, EyeOff } from "lucide-react";
 import { splitTax, isQuotationLocked, DEFAULT_TAX_TYPE, type PricingData } from "@/utils/quotationPricing";
@@ -147,6 +148,12 @@ export default async function QuotationView({ params, searchParams }: PageProps)
                     <div className="flex items-center gap-3">
                         <QuotationStatusActions id={quote.id} status={quote.status} />
                         <QuotationPrintButton id={quote.id} label="Print / Save PDF" />
+                        <WhatsAppShareButton
+                            elementId="printable-area"
+                            filename={`Quotation-${quote.quotationNumber}.pdf`}
+                            phone={quote.clientPhone}
+                            message={`Hi ${quote.clientName || "there"}, please find your quotation ${quote.quotationNumber} attached — total ${formatCurrency(quote.totalAmount ?? finalTotal)}. Thank you!${business.name ? ` — ${business.name}` : ""}`}
+                        />
                     </div>
                 </div>
 
@@ -235,6 +242,11 @@ export default async function QuotationView({ params, searchParams }: PageProps)
                                     return (
                                         <tr key={section.sectionId} className="align-top print:break-inside-avoid">
                                             <td className="p-2 print:p-1 w-44">
+                                                {section.position?.label && (
+                                                    <div className="text-slate-700 text-xs print:text-[10px] font-semibold mb-1 text-center">
+                                                        {section.position.label}
+                                                    </div>
+                                                )}
                                                 <div className="w-40 print:w-36">
                                                     <WindowSchematic
                                                         trackType={section.trackType}
@@ -255,15 +267,41 @@ export default async function QuotationView({ params, searchParams }: PageProps)
                                                     {section.areaSqFt.toFixed(2)} sq.ft
                                                     {isInternal && typeof section.materialWastagePercent === "number" && ` — ${section.materialWastagePercent.toFixed(1)}% wastage`}
                                                 </div>
+                                                {section.details && (
+                                                    <div className="mt-1.5 mb-1.5 bg-slate-50 print:bg-transparent border border-slate-200 rounded-md px-2.5 py-1.5">
+                                                        <div className="text-[10px] print:text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-1">Specification</div>
+                                                        <table className="text-xs print:text-[10px] w-full">
+                                                            <tbody className="divide-y divide-slate-200/70">
+                                                                {([
+                                                                    ["Profile Brand", section.details.profileBrand],
+                                                                    ["Series", section.details.series],
+                                                                    ["Glass", section.details.glassSpec],
+                                                                    ["Profile Color", section.details.profileColor],
+                                                                    ["Bug Mesh", section.details.meshGrade],
+                                                                    ["Mesh Handle", section.details.meshHandle],
+                                                                    ["Locking", section.details.locking],
+                                                                    ["Handle Color", section.details.handleColor],
+                                                                    ["Hinge", section.details.hinge],
+                                                                    ["Notes", section.details.notes],
+                                                                ] as const).filter(([, value]) => !!value).map(([label, value]) => (
+                                                                    <tr key={label}>
+                                                                        <td className="pr-3 py-0.5 font-medium text-slate-500 whitespace-nowrap align-top w-28">{label}</td>
+                                                                        <td className="py-0.5 text-slate-700 align-top">{value}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
                                                 {isInternal ? (
-                                                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-slate-500 text-xs print:text-[10px] mt-1">
+                                                    <div className={`flex flex-wrap gap-x-3 gap-y-0.5 text-slate-500 text-xs print:text-[10px] mt-1 ${section.details ? "pt-1 border-t border-slate-100" : ""}`}>
                                                         {allLines.filter((line) => line.cost > 0).map((line, idx) => (
                                                             <span key={idx} className="whitespace-nowrap">{line.name}: {formatCurrency(line.cost)}</span>
                                                         ))}
                                                     </div>
                                                 ) : (
                                                     includedLines.length > 0 && (
-                                                        <div className="text-slate-500 text-xs print:text-[10px] mt-1">
+                                                        <div className={`text-slate-500 text-xs print:text-[10px] mt-1 ${section.details ? "pt-1 border-t border-slate-100" : ""}`}>
                                                             Includes: {includedLines.map((line) => line.name).join(", ")}
                                                         </div>
                                                     )

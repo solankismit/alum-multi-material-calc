@@ -14,6 +14,7 @@ import { calculateLaborCost, type LaborMode } from "@/utils/laborCost";
 import {
     computeTotals,
     sumLaborItems,
+    mergeItemDetails,
     DEFAULT_TAX_TYPE,
     type LineItem,
     type SectionPricing,
@@ -21,6 +22,8 @@ import {
     type TaxType,
     type CostInclusion,
     type PricingData,
+    type ItemPosition,
+    type ItemSpecDetails,
 } from "@/utils/quotationPricing";
 import type { MaterialCategory, WindowInput } from "@/types";
 import WindowSchematic from "@/components/WindowSchematic";
@@ -226,9 +229,42 @@ function buildInitialManualSections(pricing: PricingData | null | undefined, rat
             glassType: s.glass[0]?.name || "",
             glassRate: s.glass[0]?.rate || 0,
             frameRatePerSqft: s.profiles[0]?.rate || 0,
+            position: s.position,
+            details: s.details,
         }));
     }
     return [createEmptyManualSection(rateCard)];
+}
+
+/** Derives the initial per-section-type Details defaults from a saved quotation, matched by
+ * section-type name — mirrors buildInitialSectionTypeRates but for the non-priced spec fields.
+ * Keyed the same way as sectionTypeRates, so "same system = same details" holds here too. */
+function buildInitialSectionTypeDetails(
+    input: WindowInput | null,
+    results: SectionResult[],
+    existingPricing?: PricingData | null
+): Record<string, ItemSpecDetails> {
+    const typeDetails: Record<string, ItemSpecDetails> = {};
+    results.forEach((section) => {
+        const inputSection = input?.sections.find((s) => s.id === section.sectionId);
+        const key = getSectionTypeKey(section, inputSection?.sectionTypeId);
+        if (typeDetails[key]) return;
+        const typeName = section.sectionTypeName || section.sectionName;
+        const saved = existingPricing?.sections?.find((s) => (s.sectionTypeName || s.sectionName) === typeName);
+        if (saved?.details) {
+            typeDetails[key] = saved.details;
+        }
+    });
+    return typeDetails;
+}
+
+/** Reconstructs per-item Position values for worksheet sections from a saved quotation, keyed by sectionId. */
+function buildInitialItemPositions(existingPricing?: PricingData | null): Record<string, ItemPosition> {
+    const positions: Record<string, ItemPosition> = {};
+    existingPricing?.sections?.forEach((s) => {
+        if (s.position) positions[s.sectionId] = s.position;
+    });
+    return positions;
 }
 
 export interface QuotationBuilderProps {
@@ -260,6 +296,20 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
     const [sectionTypeRates, setSectionTypeRates] = useState<Record<string, SectionTypeRates>>(
         buildInitialSectionTypeRates(initialWorksheet?.input ?? null, initialResults, initialRateCard, seedPricing)
     );
+
+    // Details (color, glass, mesh, handle, locking, hinge, notes) shared by every
+    // section using the same system — same grouping key as sectionTypeRates, so
+    // "same system = same spec" holds for both price and description. Position
+    // (where the window goes on site) and a per-item Details override live per
+    // section-id instead, since those genuinely vary window to window.
+    const [sectionTypeDetails, setSectionTypeDetails] = useState<Record<string, ItemSpecDetails>>(
+        buildInitialSectionTypeDetails(initialWorksheet?.input ?? null, initialResults, seedPricing)
+    );
+    const [itemPositions, setItemPositions] = useState<Record<string, ItemPosition>>(
+        buildInitialItemPositions(seedPricing)
+    );
+    const [itemDetailOverrides, setItemDetailOverrides] = useState<Record<string, ItemSpecDetails>>({});
+    const [expandedDetailItems, setExpandedDetailItems] = useState<Record<string, boolean>>({});
 
     // Manual (no-worksheet) sections — each has its own dimensions, track
     // type/configuration, glass rate and a flat frame rate. Reconstructed
@@ -434,6 +484,8 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 accessories,
                 subtotal,
                 materialWastagePercent: section.summary?.wastagePercent,
+                position: itemPositions[section.sectionId],
+                details: mergeItemDetails(sectionTypeDetails[typeKey], itemDetailOverrides[section.sectionId]),
             };
         });
 
@@ -488,6 +540,8 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 glass,
                 accessories,
                 subtotal,
+                position: section.position,
+                details: section.details,
             };
         });
 
@@ -542,6 +596,9 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         sectionResults,
         windowInput,
         sectionTypeRates,
+        sectionTypeDetails,
+        itemPositions,
+        itemDetailOverrides,
         manualSections,
         extraHardware,
         laborMode,
@@ -603,6 +660,28 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         setExtraHardware({
             ...extraHardware,
             [sectionId]: (extraHardware[sectionId] || []).filter((item) => item.id !== itemId),
+        });
+    };
+
+    const updateItemPosition = (sectionId: string, label: string) => {
+        setItemPositions({ ...itemPositions, [sectionId]: { ...itemPositions[sectionId], label } });
+    };
+
+    const toggleDetailOverride = (sectionId: string) => {
+        setExpandedDetailItems({ ...expandedDetailItems, [sectionId]: !expandedDetailItems[sectionId] });
+    };
+
+    const updateItemDetailOverride = (sectionId: string, updates: Partial<ItemSpecDetails>) => {
+        setItemDetailOverrides({
+            ...itemDetailOverrides,
+            [sectionId]: { ...itemDetailOverrides[sectionId], ...updates },
+        });
+    };
+
+    const updateSectionTypeDetails = (typeKey: string, updates: Partial<ItemSpecDetails>) => {
+        setSectionTypeDetails({
+            ...sectionTypeDetails,
+            [typeKey]: { ...sectionTypeDetails[typeKey], ...updates },
         });
     };
 
@@ -843,6 +922,42 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                                     </div>
                                                 </div>
                                             )}
+
+                                            {/* Details shared by every section using this system —
+                                                shown on the printed quote next to the schematic.
+                                                Leave every field blank to keep printing exactly as
+                                                it did before this feature existed. */}
+                                            <div className="pt-2 border-t border-border">
+                                                <Label className="text-[11px] mb-1 leading-tight text-text-muted">Details for this system (color, mesh, handle, locking, notes)</Label>
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                    {([
+                                                        ["profileColor", "Profile Color"],
+                                                        ["glassSpec", "Glass Spec"],
+                                                        ["meshGrade", "Bug Mesh"],
+                                                        ["meshHandle", "Mesh Handle"],
+                                                        ["locking", "Locking"],
+                                                        ["handleColor", "Handle Color"],
+                                                        ["hinge", "Hinge"],
+                                                    ] as const).map(([field, fieldLabel]) => (
+                                                        <div key={field}>
+                                                            <Label className="text-[11px] mb-0.5 leading-tight">{fieldLabel}</Label>
+                                                            <Input
+                                                                className="h-8 text-xs"
+                                                                value={sectionTypeDetails[typeRate.sectionTypeKey]?.[field] ?? ""}
+                                                                onChange={(e) => updateSectionTypeDetails(typeRate.sectionTypeKey, { [field]: e.target.value })}
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                    <div className="col-span-2 sm:col-span-4">
+                                                        <Label className="text-[11px] mb-0.5 leading-tight">Notes</Label>
+                                                        <Input
+                                                            className="h-8 text-xs"
+                                                            value={sectionTypeDetails[typeRate.sectionTypeKey]?.notes ?? ""}
+                                                            onChange={(e) => updateSectionTypeDetails(typeRate.sectionTypeKey, { notes: e.target.value })}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -874,8 +989,16 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                                         </div>
                                                     </td>
                                                     <td className="p-2">
-                                                        <div className="font-semibold text-text">
-                                                            {section.sectionName}{section.qty > 1 ? ` × ${section.qty}` : ""}
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="font-semibold text-text">
+                                                                {section.sectionName}{section.qty > 1 ? ` × ${section.qty}` : ""}
+                                                            </div>
+                                                            <Input
+                                                                className="h-7 text-xs max-w-[220px]"
+                                                                placeholder="Position, e.g. W01 GF Living Room"
+                                                                value={itemPositions[section.sectionId]?.label ?? ""}
+                                                                onChange={(e) => updateItemPosition(section.sectionId, e.target.value)}
+                                                            />
                                                         </div>
                                                         <div className="text-text-muted text-xs">
                                                             {section.configLabel ? `${section.configLabel} — ` : ""}
@@ -935,6 +1058,40 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                                             >
                                                                 <Plus className="w-3 h-3" /> Add hardware
                                                             </button>
+                                                        </div>
+
+                                                        {/* Per-item override — only needed when this one window
+                                                            differs from its system's shared Details above. */}
+                                                        <div className="mt-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => toggleDetailOverride(section.sectionId)}
+                                                                className="text-xs text-text-muted hover:text-text hover:underline"
+                                                            >
+                                                                {expandedDetailItems[section.sectionId] ? "Hide" : "Override"} details for this item
+                                                            </button>
+                                                            {expandedDetailItems[section.sectionId] && (
+                                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 mt-1">
+                                                                    {([
+                                                                        ["profileColor", "Profile Color"],
+                                                                        ["glassSpec", "Glass Spec"],
+                                                                        ["meshGrade", "Bug Mesh"],
+                                                                        ["meshHandle", "Mesh Handle"],
+                                                                        ["locking", "Locking"],
+                                                                        ["handleColor", "Handle Color"],
+                                                                        ["hinge", "Hinge"],
+                                                                        ["notes", "Notes"],
+                                                                    ] as const).map(([field, fieldLabel]) => (
+                                                                        <Input
+                                                                            key={field}
+                                                                            className="h-7 text-xs"
+                                                                            placeholder={fieldLabel}
+                                                                            value={itemDetailOverrides[section.sectionId]?.[field] ?? ""}
+                                                                            onChange={(e) => updateItemDetailOverride(section.sectionId, { [field]: e.target.value })}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </td>
                                                     <td className="p-2 text-right font-bold text-text whitespace-nowrap">{formatCurrency(section.subtotal)}</td>

@@ -6,6 +6,7 @@ import { WindowInput } from "@/types";
 import { Button } from "@/components/ui/Button";
 import WindowSchematic from "@/components/WindowSchematic";
 import PrintStyles from "@/components/PrintStyles";
+import WhatsAppShareButton from "@/components/WhatsAppShareButton";
 import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 
 interface WindowsListDocumentProps {
@@ -46,7 +47,7 @@ export default function WindowsListDocument({ worksheetId, worksheetName, create
     return (
         <div className="min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 print:p-0 font-sans">
             <PrintStyles />
-            <div className="max-w-5xl mx-auto space-y-6 print:space-y-4">
+            <div className="max-w-5xl mx-auto space-y-6 print:space-y-4" id="printable-area">
                 <div className="flex items-center justify-between print:hidden">
                     <Link href={`/worksheets/${worksheetId}`}>
                         <Button variant="ghost" className="pl-0 hover:bg-transparent hover:text-slate-900">
@@ -54,10 +55,17 @@ export default function WindowsListDocument({ worksheetId, worksheetName, create
                             Back to Worksheet
                         </Button>
                     </Link>
-                    <Button onClick={handlePrint} variant="outline" className="border-slate-300 shadow-sm">
-                        <Printer className="w-4 h-4 mr-2" />
-                        Print / Save PDF
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        <Button onClick={handlePrint} variant="outline" className="border-slate-300 shadow-sm">
+                            <Printer className="w-4 h-4 mr-2" />
+                            Print / Save PDF
+                        </Button>
+                        <WhatsAppShareButton
+                            elementId="printable-area"
+                            filename={`Window-List-${worksheetName}.pdf`}
+                            message={`Window list for ${worksheetName}.`}
+                        />
+                    </div>
                 </div>
 
                 <div className="bg-white print:shadow-none shadow-xl rounded-xl overflow-hidden border border-slate-200 print:border-0">

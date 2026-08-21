@@ -21,6 +21,8 @@ export const metadata: Metadata = {
   description: "Calculate material requirements for aluminium windows",
 };
 
+
+
 export default async function RootLayout({
   children,
 }: Readonly<{

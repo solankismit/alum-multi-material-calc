@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { aggregatePlans, getPieceDescription, getPieceColorClass } from "@/utils/cuttingPlanHelpers";
 import { resolveMaterialCategory, MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
 import PrintStyles from "@/components/PrintStyles";
+import WhatsAppShareButton from "@/components/WhatsAppShareButton";
 
 interface CuttingPlanDocumentProps {
     worksheetId: string;
@@ -41,7 +42,7 @@ export default function CuttingPlanDocument({
     return (
         <div className="min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 print:p-0 font-sans">
             <PrintStyles />
-            <div className="max-w-5xl mx-auto space-y-6 print:space-y-4">
+            <div className="max-w-5xl mx-auto space-y-6 print:space-y-4" id="printable-area">
 
                 {/* Header Actions */}
                 <div className="flex items-center justify-between print:hidden">
@@ -51,10 +52,17 @@ export default function CuttingPlanDocument({
                             Back to Worksheet
                         </Button>
                     </Link>
-                    <Button onClick={handlePrint} variant="outline" className="border-slate-300 shadow-sm">
-                        <Printer className="w-4 h-4 mr-2" />
-                        Print / Save PDF
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        <Button onClick={handlePrint} variant="outline" className="border-slate-300 shadow-sm">
+                            <Printer className="w-4 h-4 mr-2" />
+                            Print / Save PDF
+                        </Button>
+                        <WhatsAppShareButton
+                            elementId="printable-area"
+                            filename={`Cutting-Plan-${worksheetName}.pdf`}
+                            message={`Cutting plan for ${worksheetName}.`}
+                        />
+                    </div>
                 </div>
 
                 <div className="bg-white print:shadow-none shadow-xl rounded-xl overflow-hidden border border-slate-200 print:border-0">

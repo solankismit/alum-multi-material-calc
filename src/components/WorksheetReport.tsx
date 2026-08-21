@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { aggregatePlans, getPieceDescription, getPieceColorClass } from "@/utils/cuttingPlanHelpers";
 import { resolveMaterialCategory, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
 import PrintStyles from "@/components/PrintStyles";
+import WhatsAppShareButton from "@/components/WhatsAppShareButton";
 import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 
 interface WorksheetReportProps {
@@ -64,7 +65,7 @@ export default function WorksheetReport({
     return (
         <div className="min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 print:p-0 font-sans">
             <PrintStyles />
-            <div className="max-w-6xl mx-auto space-y-8 print:space-y-6">
+            <div className="max-w-6xl mx-auto space-y-8 print:space-y-6" id="printable-area">
 
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
@@ -97,6 +98,11 @@ export default function WorksheetReport({
                             <Printer className="w-4 h-4 mr-2" />
                             Print / Save PDF
                         </Button>
+                        <WhatsAppShareButton
+                            elementId="printable-area"
+                            filename={`Worksheet-Report-${worksheetName}.pdf`}
+                            message={`Worksheet report for ${worksheetName}.`}
+                        />
                     </div>
                 </div>
 

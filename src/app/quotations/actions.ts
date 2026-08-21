@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import type { QuotationStatus } from "@prisma/client";
-import { isQuotationLocked } from "@/utils/quotationPricing";
+import { isQuotationLocked, pricingDataSchema } from "@/utils/quotationPricing";
 
 export interface QuotationInput {
     worksheetId?: string | null;
@@ -13,8 +13,20 @@ export interface QuotationInput {
     clientAddress?: string;
     deliveryAddress?: string;
     customerRef?: string;
-    pricingData: unknown; // JSON structure for rates
+    pricingData: unknown; // JSON structure for rates — validated against pricingDataSchema before it's persisted
     totalAmount: number;
+}
+
+/** Validates pricingData against the shared schema; returns a parsed, typed value on success. */
+function parsePricingData(pricingData: unknown) {
+    const result = pricingDataSchema.safeParse(pricingData);
+    if (!result.success) {
+        const message = result.error.issues[0]
+            ? `${result.error.issues[0].path.join(".")}: ${result.error.issues[0].message}`
+            : "Invalid pricing data";
+        return { success: false as const, error: message };
+    }
+    return { success: true as const, data: result.data };
 }
 
 /** Atomically reserves the next sequential quotation number for this user. */
@@ -46,6 +58,11 @@ export async function createQuotation(input: QuotationInput) {
             }
         }
 
+        const parsed = parsePricingData(input.pricingData);
+        if (!parsed.success) {
+            return { success: false, error: `Invalid pricing data: ${parsed.error}` };
+        }
+
         const quotationNumber = await nextQuotationNumber(userId);
 
         const quotation = await db.quotation.create({
@@ -58,7 +75,7 @@ export async function createQuotation(input: QuotationInput) {
                 deliveryAddress: input.deliveryAddress,
                 customerRef: input.customerRef,
                 quotationNumber,
-                pricingData: input.pricingData as never,
+                pricingData: parsed.data as never,
                 totalAmount: input.totalAmount,
             },
         });
@@ -99,6 +116,11 @@ export async function updateQuotation(id: string, input: QuotationInput) {
             }
         }
 
+        const parsed = parsePricingData(input.pricingData);
+        if (!parsed.success) {
+            return { success: false, error: `Invalid pricing data: ${parsed.error}` };
+        }
+
         await db.quotation.update({
             where: { id },
             data: {
@@ -108,7 +130,7 @@ export async function updateQuotation(id: string, input: QuotationInput) {
                 clientAddress: input.clientAddress,
                 deliveryAddress: input.deliveryAddress,
                 customerRef: input.customerRef,
-                pricingData: input.pricingData as never,
+                pricingData: parsed.data as never,
                 totalAmount: input.totalAmount,
             },
         });

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import ClientPrintButton from "./ClientPrintButton";
+import WhatsAppShareButton from "@/components/WhatsAppShareButton";
 import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/Table";
 // import ClientPrintButton from "./ClientPrintButton"; // We'll create this small client component
@@ -218,7 +219,7 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
 
     return (
         <div className="min-h-screen bg-surface-muted p-4 md:p-8 font-sans print:bg-white print:p-0">
-            <div className="max-w-5xl mx-auto space-y-6 md:space-y-8">
+            <div className="max-w-5xl mx-auto space-y-6 md:space-y-8" id="printable-area">
                 {/* Header Actions */}
                 <div className="flex justify-between items-center print:hidden">
                     <Link href="/dashboard">
@@ -227,7 +228,14 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
                             Back to Dashboard
                         </Button>
                     </Link>
-                    <ClientPrintButton label="Print Orderbook" />
+                    <div className="flex items-center gap-3">
+                        <ClientPrintButton label="Print Orderbook" />
+                        <WhatsAppShareButton
+                            elementId="printable-area"
+                            filename="Orderbook-Summary.pdf"
+                            message={`Orderbook summary — ${worksheets.length} worksheet(s): ${worksheets.map((w) => w.name).join(", ")}.`}
+                        />
+                    </div>
                 </div>
 
                 {/* Report Content */}
