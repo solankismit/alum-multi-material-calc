@@ -17,7 +17,7 @@ export default async function DashboardPage() {
     if (!user) return redirect("/login");
 
     return (
-        <PageContainer contentClassName="max-w-5xl space-y-6">
+        <PageContainer contentClassName="space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold text-text">Dashboard</h1>
                 <Link href="/dashboard/settings">

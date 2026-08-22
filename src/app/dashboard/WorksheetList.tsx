@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Input } from "@/components/ui/Input";
-import { Label } from "@/components/ui/Label";
 import {
     Dialog,
     DialogContent,
@@ -15,10 +14,9 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/Dialog";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { Skeleton, LoadingStatus } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
 import { Trash2, FileText, ExternalLink, Plus, Layers, ClipboardList, Receipt, AlertTriangle } from "lucide-react";
 import { combineWorksheets } from "../worksheets/actions";
@@ -144,6 +142,7 @@ export default function WorksheetList() {
     if (loading) {
         return (
             <Card>
+                <LoadingStatus label="Loading worksheets" />
                 <CardHeader>
                     <Skeleton className="h-6 w-40" />
                     <Skeleton className="h-4 w-64" />

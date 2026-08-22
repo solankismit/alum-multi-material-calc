@@ -10,7 +10,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { Skeleton, LoadingStatus } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
 import { useRouter } from "next/navigation";
 
@@ -141,6 +141,7 @@ export default function Calculator({ initialInput }: CalculatorProps) {
                 <div className="lg:col-span-1">
                     {sectionsLoading ? (
                         <div className="space-y-4 rounded-xl border border-border bg-surface p-6 shadow-sm">
+                            <LoadingStatus label="Loading window systems" />
                             <Skeleton className="h-6 w-48" />
                             <Skeleton className="h-40 w-full rounded-lg" />
                             <Skeleton className="h-40 w-full rounded-lg" />
@@ -205,8 +206,8 @@ export default function Calculator({ initialInput }: CalculatorProps) {
                             </div>
                         </>
                     ) : (
-                        <div className="hidden lg:flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-surface/50 p-12 text-center h-full min-h-[300px]">
-                            <CalculatorIcon className="h-8 w-8 text-text-muted" />
+                        <div className="flex flex-col items-center justify-center gap-2 lg:gap-3 rounded-xl border border-dashed border-border bg-surface/50 p-6 lg:p-12 text-center h-full lg:min-h-[300px]">
+                            <CalculatorIcon className="h-6 w-6 lg:h-8 lg:w-8 text-text-muted" />
                             <p className="text-sm text-text-muted max-w-xs">
                                 Fill in the window specifications and calculate to see material
                                 requirements here.

@@ -35,7 +35,7 @@ export default function QuotationHeaderActions({ id, worksheetId, locked }: Quot
     };
 
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             <Link href="/quotations">
                 <Button variant="outline">
                     <ArrowLeft className="w-4 h-4 mr-2" />

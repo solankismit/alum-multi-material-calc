@@ -3,18 +3,17 @@ import { listQuotations } from "./actions";
 import { formatCurrency } from "@/utils/formatters";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/Table";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { ArrowLeft, FileText, Plus } from "lucide-react";
-import { QUOTATION_STATUS_VARIANT } from "@/lib/utils";
+import QuotationStatusCell from "./QuotationStatusCell";
 
 export default async function QuotationsListPage() {
     const res = await listQuotations();
     const quotations = res.data;
 
     return (
-        <PageContainer size="medium" contentClassName="space-y-6">
+        <PageContainer contentClassName="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-text">Quotations</h1>
@@ -72,7 +71,7 @@ export default async function QuotationsListPage() {
                                             <span className="font-semibold text-primary">
                                                 {q.quotationNumber || q.id.slice(0, 8)}
                                             </span>
-                                            <Badge variant={QUOTATION_STATUS_VARIANT[q.status]}>{q.status}</Badge>
+                                            <QuotationStatusCell id={q.id} status={q.status} />
                                         </div>
                                         <div className="flex items-center justify-between text-sm">
                                             <span className="text-text-muted">{q.clientName || "—"}</span>
@@ -108,7 +107,7 @@ export default async function QuotationsListPage() {
                                                 <TableCell>{q.clientName || "—"}</TableCell>
                                                 <TableCell className="text-text-muted">{new Date(q.createdAt).toLocaleDateString()}</TableCell>
                                                 <TableCell>
-                                                    <Badge variant={QUOTATION_STATUS_VARIANT[q.status]}>{q.status}</Badge>
+                                                    <QuotationStatusCell id={q.id} status={q.status} />
                                                 </TableCell>
                                                 <TableCell className="text-right font-medium">{formatCurrency(q.totalAmount)}</TableCell>
                                             </TableRow>

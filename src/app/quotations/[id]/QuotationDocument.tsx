@@ -92,9 +92,9 @@ export default function QuotationDocument({
     const showExtraCostsRow = showLaborRow || showOverheadRow || showInstallationRow || showTransportationRow;
 
     return (
-        <div className="min-h-screen bg-surface-muted p-8 print:p-0 print:bg-white">
+        <div className="min-h-screen bg-surface-muted px-4 sm:px-6 lg:px-8 py-8 print:p-0 print:bg-white">
             <PrintStyles />
-            <div className="max-w-4xl mx-auto print:hidden mb-3 flex items-center justify-between">
+            <div className="max-w-7xl mx-auto print:hidden mb-3 flex items-center justify-between">
                 <Breadcrumbs
                     items={[
                         { label: "Dashboard", href: "/dashboard" },
@@ -112,20 +112,27 @@ export default function QuotationDocument({
                     {isInternal ? "Viewing Internal Cost Sheet — switch to Customer View" : "View Internal Cost Sheet"}
                 </button>
             </div>
-            <div className="max-w-4xl mx-auto bg-surface shadow-lg print:shadow-none p-8 md:p-12 print:p-0 text-sm print:text-[11px]" id="printable-area">
+            {/* Screen width matches the header's max-w-7xl; print keeps the
+                original max-w-4xl so the printed page is unaffected by
+                whatever width the screen happened to be shown at. */}
+            <div className="max-w-7xl print:max-w-4xl mx-auto bg-surface shadow-lg print:shadow-none p-8 md:p-12 print:p-0 text-sm print:text-[11px]" id="printable-area">
 
-                {/* Header Actions (Hidden continuously in print) */}
-                <div className="print:hidden flex justify-between items-center mb-8">
+                {/* Header Actions (Hidden continuously in print) — stacks on
+                    narrow screens and groups by kind (navigate/edit, status,
+                    export) with the one primary action, Print, called out
+                    instead of every button carrying the same outline weight. */}
+                <div className="print:hidden flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-8">
                     <QuotationHeaderActions id={quote.id} worksheetId={quote.worksheetId} locked={locked} />
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
                         <QuotationStatusActions id={quote.id} status={quote.status} />
-                        <QuotationPrintButton id={quote.id} label="Print / Save PDF" />
+                        <div className="h-6 w-px bg-border mx-1 hidden sm:block" aria-hidden="true" />
                         <WhatsAppShareButton
                             elementId="printable-area"
                             filename={`Quotation-${quote.quotationNumber}.pdf`}
                             phone={quote.clientPhone ?? undefined}
                             message={`Hi ${quote.clientName || "there"}, please find your quotation ${quote.quotationNumber} attached — total ${formatCurrency(quote.totalAmount ?? finalTotal)}. Thank you!${business.name ? ` — ${business.name}` : ""}`}
                         />
+                        <QuotationPrintButton id={quote.id} label="Print / Save PDF" />
                     </div>
                 </div>
 

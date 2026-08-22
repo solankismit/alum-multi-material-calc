@@ -36,8 +36,8 @@ export default function LoginPage() {
             // and the Navbar shows the correct user.
             router.refresh();
             window.location.href = "/dashboard";
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Something went wrong");
         } finally {
             setLoading(false);
         }
@@ -69,30 +69,32 @@ export default function LoginPage() {
                     <h2 className="text-center text-3xl font-bold tracking-tight text-text">
                         Sign in to your account
                     </h2>
-                    <form className="space-y-4" onSubmit={handleSubmit}>
+                    <form className="space-y-4" onSubmit={handleSubmit} noValidate>
                         <Input
                             id="email-address"
                             name="email"
                             type="email"
                             required
-                            placeholder="Email address"
+                            label="Email address"
+                            placeholder="you@example.com"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            aria-label="Email address"
+                            aria-describedby={error ? "login-error" : undefined}
                         />
                         <Input
                             id="password"
                             name="password"
                             type="password"
                             required
-                            placeholder="Password"
+                            label="Password"
+                            placeholder="••••••••"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            aria-label="Password"
+                            aria-describedby={error ? "login-error" : undefined}
                         />
 
                         {error && (
-                            <div className="text-center text-sm text-danger">{error}</div>
+                            <div id="login-error" role="alert" className="text-center text-sm text-danger">{error}</div>
                         )}
 
                         <Button type="submit" isLoading={loading} className="w-full">

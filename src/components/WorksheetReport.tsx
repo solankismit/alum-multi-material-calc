@@ -19,6 +19,10 @@ interface WorksheetReportProps {
     input: WindowInput;
     result: CalculationResult | null;
     sectionName?: string;
+    /** True when rendered as a tab inside WorksheetHub — suppresses the
+     * "Back to Dashboard" link and the Windows List / Cutting Plan buttons,
+     * since those become the hub's own tabs and shared back link. */
+    embedded?: boolean;
 }
 
 // --- Sub-Components ---
@@ -38,6 +42,7 @@ export default function WorksheetReport({
     input,
     result,
     sectionName,
+    embedded = false,
 }: WorksheetReportProps) {
     const handlePrint = () => {
         window.print();
@@ -47,9 +52,11 @@ export default function WorksheetReport({
         return (
             <div className="p-8 text-center">
                 <h2 className="text-xl font-semibold text-red-600">No calculation result found.</h2>
-                <Link href="/dashboard">
-                    <Button className="mt-4">Back to Dashboard</Button>
-                </Link>
+                {!embedded && (
+                    <Link href="/dashboard">
+                        <Button className="mt-4">Back to Dashboard</Button>
+                    </Link>
+                )}
             </div>
         );
     }
@@ -63,37 +70,45 @@ export default function WorksheetReport({
     const totalWastageFt = (result.combinedSummary.totalWastage || 0) / 304.8;
 
     return (
-        <div className="min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 print:p-0 font-sans">
-            <PrintStyles />
-            <div className="max-w-6xl mx-auto space-y-8 print:space-y-6" id="printable-area">
+        <div className={embedded ? "font-sans" : "min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 print:p-0 font-sans"}>
+            {!embedded && <PrintStyles />}
+            <div className={embedded ? "space-y-8 print:space-y-6" : "max-w-6xl mx-auto space-y-8 print:space-y-6"} id="printable-area">
 
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
-                    <Link href="/dashboard">
-                        <Button variant="ghost" className="pl-0 hover:bg-transparent hover:text-slate-900">
-                            <ArrowLeft className="w-5 h-5 mr-2" />
-                            Back to Dashboard
-                        </Button>
-                    </Link>
-                    <div className="flex items-center gap-2">
-                        <Link href={`/worksheets/${worksheetId}/windows-list`}>
-                            <Button variant="outline" className="border-slate-300 shadow-sm">
-                                <List className="w-4 h-4 mr-2" />
-                                Windows List
+                    {!embedded && (
+                        <Link href="/dashboard">
+                            <Button variant="ghost" className="pl-0 hover:bg-transparent hover:text-slate-900">
+                                <ArrowLeft className="w-5 h-5 mr-2" />
+                                Back to Dashboard
                             </Button>
                         </Link>
-                        <Link href={`/worksheets/${worksheetId}/cutting-plan`}>
-                            <Button variant="outline" className="border-slate-300 shadow-sm">
-                                <Scissors className="w-4 h-4 mr-2" />
-                                Cutting Plan
-                            </Button>
-                        </Link>
-                        <Link href={`/quotations/create?worksheetId=${worksheetId}`}>
-                            <Button variant="outline" className="border-slate-300 shadow-sm">
-                                <Receipt className="w-4 h-4 mr-2" />
-                                Create Quotation
-                            </Button>
-                        </Link>
+                    )}
+                    {/* Grouped by kind (navigate to a sibling view / export a
+                        copy) with a divider before the one primary business
+                        action — previously all five buttons were the same
+                        `outline` weight, so "Create Quotation" (the action
+                        that matters most here) looked no more important than
+                        "Print." When embedded, Windows List/Cutting Plan are
+                        the hub's own tabs, so they're dropped here. */}
+                    <div className={`flex flex-wrap items-center gap-2 ${embedded ? "ml-auto" : ""}`}>
+                        {!embedded && (
+                            <>
+                                <Link href={`/worksheets/${worksheetId}/windows-list`}>
+                                    <Button variant="outline" className="border-slate-300 shadow-sm">
+                                        <List className="w-4 h-4 mr-2" />
+                                        Windows List
+                                    </Button>
+                                </Link>
+                                <Link href={`/worksheets/${worksheetId}/cutting-plan`}>
+                                    <Button variant="outline" className="border-slate-300 shadow-sm">
+                                        <Scissors className="w-4 h-4 mr-2" />
+                                        Cutting Plan
+                                    </Button>
+                                </Link>
+                            </>
+                        )}
+                        <div className="h-6 w-px bg-slate-200 mx-1 hidden sm:block" aria-hidden="true" />
                         <Button onClick={handlePrint} variant="outline" className="border-slate-300 shadow-sm">
                             <Printer className="w-4 h-4 mr-2" />
                             Print / Save PDF
@@ -103,6 +118,13 @@ export default function WorksheetReport({
                             filename={`Worksheet-Report-${worksheetName}.pdf`}
                             message={`Worksheet report for ${worksheetName}.`}
                         />
+                        <div className="h-6 w-px bg-slate-200 mx-1 hidden sm:block" aria-hidden="true" />
+                        <Link href={`/quotations/create?worksheetId=${worksheetId}`}>
+                            <Button className="shadow-sm">
+                                <Receipt className="w-4 h-4 mr-2" />
+                                Create Quotation
+                            </Button>
+                        </Link>
                     </div>
                 </div>
 
@@ -168,7 +190,7 @@ export default function WorksheetReport({
                             <div key={sIdx} className="space-y-8 print:break-before-page">
 
                                 <div className="bg-indigo-50 p-5 rounded-r-xl border-l-4 border-indigo-600 shadow-sm mb-6 print:bg-transparent print:border-l-0 print:shadow-none print:p-0 print:mb-4 print:border-b-2 print:border-black">
-                                    <h2 className="text-3xl font-black text-indigo-950 uppercase tracking-tight">{secResult.sectionName}</h2>
+                                    <h2 className="text-xl sm:text-3xl font-black text-indigo-950 uppercase tracking-tight break-words">{secResult.sectionName}</h2>
                                     <p className="text-indigo-700/80 font-semibold text-sm mt-1 uppercase tracking-wider">{secResult.sectionTypeName ? `System: ${secResult.sectionTypeName} • ` : ""}Section Details & Cutting Lists</p>
                                 </div>
 

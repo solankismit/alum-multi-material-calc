@@ -41,7 +41,7 @@ export default function QuotationStatusActions({ id, status }: { id: string; sta
     };
 
     return (
-        <div className="flex items-center gap-2 print:hidden">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
             <Badge variant={QUOTATION_STATUS_VARIANT[status]}>{status}</Badge>
             {status === "DRAFT" && (
                 <Button

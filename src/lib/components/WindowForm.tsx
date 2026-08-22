@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Calculator, RotateCcw, Plus, Trash2, X } from "lucide-react";
+import { Calculator, RotateCcw, Plus, Trash2, X, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { feetToMm, mmToFeet } from "@/utils/formatters";
 import {
   validateSectionDimensions,
@@ -33,9 +33,52 @@ interface WindowFormProps {
 
 const KERF_STORAGE_KEY = "alum_kerf_width_mm";
 
+function KerfControl({ kerfWidthMm, onChange, fullWidth }: { kerfWidthMm: number; onChange: (v: number) => void; fullWidth?: boolean }) {
+  return (
+    <div className={`flex items-center gap-2 bg-surface p-1.5 rounded-lg border border-border shadow-sm ${fullWidth ? "w-full justify-between" : ""}`}>
+      <Label htmlFor="kerf-width" className="text-xs font-semibold uppercase text-text-muted px-1 mb-0">Kerf (mm):</Label>
+      <Input
+        id="kerf-width"
+        type="number"
+        step="0.5"
+        min="0"
+        value={kerfWidthMm}
+        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+        className={fullWidth ? "h-9 w-24 text-center px-1" : "h-8 w-16 text-center px-1"}
+        title="Saw blade kerf width — material lost per cut"
+      />
+    </div>
+  );
+}
+
+function UnitToggle({ unitMode, onChange, fullWidth }: { unitMode: "mm" | "ft"; onChange: (u: "mm" | "ft") => void; fullWidth?: boolean }) {
+  return (
+    <div className={`flex items-center gap-3 bg-surface p-1.5 rounded-lg border border-border shadow-sm ${fullWidth ? "w-full justify-between" : ""}`}>
+      <span className="text-xs font-semibold uppercase text-text-muted px-2">Unit:</span>
+      <div className="flex gap-1" role="radiogroup" aria-label="Measurement unit">
+        {(["mm", "ft"] as const).map((u) => (
+          <Button
+            key={u}
+            type="button"
+            size="sm"
+            role="radio"
+            aria-checked={unitMode === u}
+            variant={unitMode === u ? "primary" : "ghost"}
+            onClick={() => onChange(u)}
+            className={fullWidth ? "h-9 flex-1" : "h-8 px-4"}
+          >
+            {u}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function WindowForm({ onCalculate, onReset, initialValues, allSections }: WindowFormProps) {
   const { toast } = useToast();
   const [unitMode, setUnitMode] = useState<"mm" | "ft">("mm");
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
 
   const [kerfWidthMm, setKerfWidthMm] = useState<number>(
     initialValues?.kerfWidthMm ?? DEFAULT_KERF_WIDTH_MM
@@ -350,43 +393,31 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
             Window Specifications
           </CardTitle>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-surface p-1.5 rounded-lg border border-border shadow-sm">
-              <Label className="text-xs font-semibold uppercase text-text-muted px-1 mb-0">Kerf (mm):</Label>
-              <Input
-                type="number"
-                step="0.5"
-                min="0"
-                value={kerfWidthMm}
-                onChange={(e) => handleKerfChange(parseFloat(e.target.value) || 0)}
-                className="h-8 w-16 text-center px-1"
-                title="Saw blade kerf width — material lost per cut"
-              />
-            </div>
-
-            <div className="flex items-center gap-3 bg-surface p-1.5 rounded-lg border border-border shadow-sm">
-              <span className="text-xs font-semibold uppercase text-text-muted px-2">Unit:</span>
-              <div className="flex gap-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={unitMode === "mm" ? "primary" : "ghost"}
-                  onClick={() => handleUnitToggle("mm")}
-                  className="h-8 px-4"
-                >
-                  mm
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={unitMode === "ft" ? "primary" : "ghost"}
-                  onClick={() => handleUnitToggle("ft")}
-                  className="h-8 px-4"
-                >
-                  ft
-                </Button>
+          {/* Desktop: both pills inline. Mobile: collapsed into one compact
+              chip that expands on tap, so the first dimension field is still
+              visible without scrolling past two full-height toolbar pills. */}
+          <div className="hidden sm:flex items-center gap-3">
+            <KerfControl kerfWidthMm={kerfWidthMm} onChange={handleKerfChange} />
+            <UnitToggle unitMode={unitMode} onChange={handleUnitToggle} />
+          </div>
+          <div className="sm:hidden w-full">
+            <button
+              type="button"
+              onClick={() => setSettingsExpanded((v) => !v)}
+              aria-expanded={settingsExpanded}
+              aria-controls="calc-settings-panel"
+              className="flex items-center gap-1.5 text-xs font-semibold text-text-muted bg-surface px-3 py-1.5 rounded-lg border border-border shadow-sm"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Kerf {kerfWidthMm}mm · {unitMode}
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
+            </button>
+            {settingsExpanded && (
+              <div id="calc-settings-panel" className="mt-2 flex flex-col gap-2 animate-in fade-in slide-in-from-top-1">
+                <KerfControl kerfWidthMm={kerfWidthMm} onChange={handleKerfChange} fullWidth />
+                <UnitToggle unitMode={unitMode} onChange={handleUnitToggle} fullWidth />
               </div>
-            </div>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -422,10 +453,10 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                       onChange={(e) =>
                         updateSection(section.id, { name: e.target.value })
                       }
-                      id="sectionName"
+                      id={`sectionName-${section.id}`}
                       labelClassName="text-text-muted font-medium text-xs mb-1 block leading-none"
                       placeholder="e.g. Living Room Window"
-                      className=" font-medium border-0 border-b rounded-none border-border  px-0 focus:ring-0 focus:border-text transition-colors bg-transparent placeholder:text-text-muted"
+                      className="font-medium"
                     />
                   </div>
 
@@ -448,6 +479,9 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                           ))}
                         </SelectContent>
                       </Select>
+                      {(!allSections || allSections.length === 0) && (
+                        <p className="text-xs text-warning mt-1">No systems configured yet — add one in Admin.</p>
+                      )}
                     </div>
                     {sections.length > 1 && (
                       <Button
@@ -480,10 +514,12 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                     {!isSystemOpenable && (
                       <div className="space-y-3">
                         <Label className="text-text-muted font-medium">Track Type</Label>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Track type">
                           <Button
                             type="button"
                             variant="outline"
+                            role="radio"
+                            aria-checked={section.trackType === "2-track"}
                             onClick={() => {
                               updateSection(section.id, {
                                 trackType: "2-track",
@@ -501,6 +537,8 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                           <Button
                             type="button"
                             variant="outline"
+                            role="radio"
+                            aria-checked={section.trackType === "3-track"}
                             onClick={() =>
                               updateSection(section.id, { trackType: "3-track", configuration: "glass-mosquito" })
                             }
@@ -518,10 +556,12 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
 
                     <div className="space-y-3">
                       <Label className="text-text-muted font-medium">Configuration</Label>
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-2" role="radiogroup" aria-label="Configuration">
                         <Button
                           type="button"
                           variant="outline"
+                          role="radio"
+                          aria-checked={section.configuration === "all-glass"}
                           onClick={() =>
                             updateSection(section.id, { configuration: "all-glass" })
                           }
@@ -537,6 +577,8 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                         <Button
                           type="button"
                           variant="outline"
+                          role="radio"
+                          aria-checked={section.configuration === "glass-mosquito"}
                           onClick={() => {
                             updateSection(section.id, {
                               configuration: "glass-mosquito",
@@ -625,6 +667,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                         className="max-h-[220px] shadow-sm"
                       />
                     </div>
+                    <p className="text-xs text-text-muted">Shows track &amp; configuration — not drawn to the dimensions below.</p>
                   </div>
                 </div>
 
@@ -633,18 +676,19 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                   {/* Persistent column headers — every row needs a visible label,
                       not just the first (that was a real bug: rows 2+ had no
                       indication of which field or unit they were). */}
-                  <div className="grid grid-cols-12 gap-2 sm:gap-3 text-xs font-medium text-text-muted px-0.5">
-                    <div className="col-span-4">Height ({unitMode})</div>
-                    <div className="col-span-4">Width ({unitMode})</div>
-                    <div className="col-span-4">Qty</div>
+                  <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 sm:gap-3 text-xs font-medium text-text-muted px-0.5">
+                    <div>Height ({unitMode})</div>
+                    <div>Width ({unitMode})</div>
+                    <div>Qty</div>
+                    {section.dimensions.length > 1 && <div className="w-9" aria-hidden="true" />}
                   </div>
                   <div className="space-y-3">
                     {section.dimensions.map((dimension) => (
                       <div
                         key={dimension.id}
-                        className="grid grid-cols-12 gap-2 sm:gap-3 items-start animate-in fade-in slide-in-from-top-1 duration-200"
+                        className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 sm:gap-3 items-start animate-in fade-in slide-in-from-top-1 duration-200"
                       >
-                        <div className="col-span-4">
+                        <div>
                           <Input
                             type="number"
                             step={unitMode === "ft" ? "0.01" : "0.1"}
@@ -740,7 +784,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                           />
                         </div>
 
-                        <div className="col-span-4">
+                        <div>
                           <Input
                             type="number"
                             step={unitMode === "ft" ? "0.01" : "0.1"}
@@ -832,40 +876,38 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                           />
                         </div>
 
-                        <div className="col-span-4 flex items-end gap-1">
-                          <div className="flex-1">
-                            <Input
-                              type="number"
-                              min="1"
-                              max="100"
-                              placeholder="Qty"
-                              value={dimension.quantity === null ? "" : dimension.quantity}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                if (value === "") {
-                                  updateDimension(section.id, dimension.id, { quantity: null });
-                                  return;
-                                }
-                                const num = Number(value);
-                                if (!isNaN(num)) updateDimension(section.id, dimension.id, { quantity: num });
-                              }}
-                              className="text-center"
-                            />
-                          </div>
-                          {section.dimensions.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeDimension(section.id, dimension.id)}
-                              className="shrink-0 text-text-muted hover:text-danger hover:bg-danger-surface"
-                              aria-label="Remove dimension"
-                              title="Remove Dimension"
-                            >
-                              <X className="w-5 h-5" />
-                            </Button>
-                          )}
+                        <div>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="100"
+                            placeholder="Qty"
+                            value={dimension.quantity === null ? "" : dimension.quantity}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === "") {
+                                updateDimension(section.id, dimension.id, { quantity: null });
+                                return;
+                              }
+                              const num = Number(value);
+                              if (!isNaN(num)) updateDimension(section.id, dimension.id, { quantity: num });
+                            }}
+                            className="text-center"
+                          />
                         </div>
+                        {section.dimensions.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeDimension(section.id, dimension.id)}
+                            className="shrink-0 text-text-muted hover:text-danger hover:bg-danger-surface self-center"
+                            aria-label="Remove dimension"
+                            title="Remove Dimension"
+                          >
+                            <X className="w-5 h-5" />
+                          </Button>
+                        )}
                       </div>
                     ))}
                   </div>

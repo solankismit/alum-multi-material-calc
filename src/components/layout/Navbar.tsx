@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Calculator, LayoutDashboard, Settings, LogOut, Menu, X, User, Receipt, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { BottomSheet, BottomSheetContent } from "@/components/ui/BottomSheet";
 import { cn } from "@/lib/utils";
 
 interface NavbarProps {
@@ -24,6 +25,14 @@ interface NavItem {
 export default function Navbar({ user }: NavbarProps) {
     const pathname = usePathname();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    // Reset during render (React's documented pattern for "adjust state when
+    // a prop changes") rather than in an effect, so navigating doesn't cause
+    // an extra post-paint re-render just to close the menu.
+    const [prevPathname, setPrevPathname] = useState(pathname);
+    if (pathname !== prevPathname) {
+        setPrevPathname(pathname);
+        setIsMenuOpen(false);
+    }
 
     // Root ("/") only matches exactly, otherwise every path would highlight
     // it. Every other nav item matches its own path and any nested route
@@ -85,7 +94,7 @@ export default function Navbar({ user }: NavbarProps) {
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm text-text font-medium">{user.name || user.email}</span>
                                     <form action="/api/auth/logout" method="POST">
-                                        <Button variant="ghost" size="sm" className="text-danger hover:text-danger hover:bg-danger-surface">
+                                        <Button variant="ghost" size="sm" className="text-danger hover:text-danger hover:bg-danger-surface" aria-label="Sign out">
                                             <LogOut className="h-4 w-4" />
                                         </Button>
                                     </form>
@@ -105,9 +114,11 @@ export default function Navbar({ user }: NavbarProps) {
                     <div className="-mr-2 flex items-center sm:hidden">
                         <button
                             onClick={toggleMenu}
+                            aria-expanded={isMenuOpen}
+                            aria-controls="mobile-menu"
                             className="inline-flex items-center justify-center p-2 rounded-md text-text-muted hover:text-text hover:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                         >
-                            <span className="sr-only">Open main menu</span>
+                            <span className="sr-only">{isMenuOpen ? "Close main menu" : "Open main menu"}</span>
                             {isMenuOpen ? (
                                 <X className="block h-6 w-6" aria-hidden="true" />
                             ) : (
@@ -118,10 +129,13 @@ export default function Navbar({ user }: NavbarProps) {
                 </div>
             </div>
 
-            {/* Mobile menu */}
-            {isMenuOpen && (
-                <div className="sm:hidden">
-                    <div className="pt-2 pb-3 space-y-1">
+            {/* Mobile menu — a bottom sheet instead of an inline dropdown, so it
+                gets a proper slide-up transition, a focus trap, ESC-to-close,
+                and tap-outside-to-close for free from the same Radix Dialog
+                primitive the rest of the app's modals already use. */}
+            <BottomSheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+                <BottomSheetContent title="Menu" id="mobile-menu" className="sm:hidden">
+                    <div className="space-y-1">
                         {navItems.map((item) => (
                             <Link
                                 key={item.href}
@@ -190,8 +204,8 @@ export default function Navbar({ user }: NavbarProps) {
                             </div>
                         )}
                     </div>
-                </div>
-            )}
+                </BottomSheetContent>
+            </BottomSheet>
         </nav>
     );
 }

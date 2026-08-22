@@ -1,5 +1,5 @@
 import { getOwnedWorksheet } from "@/lib/data-fetchers";
-import WorksheetReport from "@/components/WorksheetReport";
+import WorksheetHub from "@/components/WorksheetHub";
 import { AccessDenied } from "@/components/layout/AccessDenied";
 
 export default async function WorksheetDetailPage({
@@ -23,13 +23,14 @@ export default async function WorksheetDetailPage({
     }
 
     return (
-        <WorksheetReport
+        <WorksheetHub
             worksheetId={worksheet.id}
             worksheetName={worksheet.name}
             createdAt={worksheet.createdAt}
             input={input}
             result={result}
             sectionName={sectionName}
+            initialTab="report"
         />
     );
 }

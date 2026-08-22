@@ -6,7 +6,7 @@ import { formatCurrency, AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
-import { ArrowLeft, Save, FileText, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Save, FileText, Plus, Trash2, Check } from "lucide-react";
 import Link from "next/link";
 import { createQuotation, updateQuotation } from "../actions";
 import { resolveMaterialCategory, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
@@ -130,19 +130,6 @@ function buildConfigLabel(section: {
         section.panels ? `${section.panels} Shutter${section.panels > 1 ? "s" : ""}` : undefined,
     ];
     return parts.filter(Boolean).join(" — ");
-}
-
-function computeOverallAreaSqFt(sections: WindowInput["sections"] | undefined): number {
-    if (!sections) return 0;
-    let totalSqMm = 0;
-    sections.forEach((section) => {
-        section.dimensions.forEach((dim) => {
-            if (dim.width && dim.height && dim.quantity) {
-                totalSqMm += dim.width * dim.height * dim.quantity;
-            }
-        });
-    });
-    return totalSqMm / AREA_SQMM_PER_SQFT;
 }
 
 /** Derives the initial section-type rate bundles from a loaded worksheet + rate card,
@@ -286,7 +273,6 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
     const initialResults = initialWorksheet?.result?.sectionResults ?? [];
     const [sectionResults] = useState<SectionResult[]>(initialResults);
     const [windowInput] = useState<WindowInput | null>(initialWorksheet?.input ?? null);
-    const [overallAreaSqFt] = useState<number>(computeOverallAreaSqFt(initialWorksheet?.input?.sections));
     const [rateCard] = useState<RateCardData | null>(initialRateCard);
 
     // Pricing state — seeded from the rate card once it loads, or from the
@@ -388,6 +374,28 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
     const [clientAddress, setClientAddress] = useState(initialQuotation?.clientAddress ?? "");
     const [deliveryAddress, setDeliveryAddress] = useState(initialQuotation?.deliveryAddress ?? "");
     const [customerRef, setCustomerRef] = useState(initialQuotation?.customerRef ?? "");
+
+    // Step flow — purely a presentation concern layered on top of the existing
+    // state above. Nothing about validation, pricing, or save behavior changes:
+    // every field still lives in the same state it always has, this just
+    // controls which card is visible at once instead of showing all of them
+    // in one long scroll. Save as Draft / Generate Quote stay reachable from
+    // every step, since a draft save shouldn't require finishing a "wizard."
+    const STEPS = [
+        { key: "client", label: "Client" },
+        { key: "sections", label: worksheetId ? "Rates & Sections" : "Window Sections" },
+        { key: "costs", label: "Costs & Margins" },
+        { key: "review", label: "Review & Terms" },
+    ] as const;
+    const [step, setStep] = useState(0);
+    const goNext = () => {
+        if (step === 0 && !clientName.trim()) {
+            toast("Add a client name before continuing.", "error");
+            return;
+        }
+        setStep((s) => Math.min(s + 1, STEPS.length - 1));
+    };
+    const goBack = () => setStep((s) => Math.max(s - 1, 0));
 
     const installation: CostInclusion = { included: installationIncluded, amount: installationAmount, note: installationNote };
     const transportation: CostInclusion = { included: transportationIncluded, amount: transportationAmount, note: transportationNote };
@@ -556,6 +564,11 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         const meshCount = sectionResults.reduce((sum, s) => sum + s.accessories.mosquitoCChannel, 0);
         const trackCapCount = sectionResults.reduce((sum, s) => sum + s.accessories.trackCap, 0);
         const totalAccessoryCost = sectionBreakdowns.reduce((sum, s) => sum + s.accessories.reduce((ss, a) => ss + a.cost, 0), 0);
+        // Derived from the section breakdowns rather than the original worksheet
+        // input, so it's correct for manual (no-worksheet) quotations too — those
+        // have no `windowInput`, only `manualSections`, which already feed into
+        // `sectionBreakdowns[].areaSqFt` above.
+        const overallAreaSqFt = sectionBreakdowns.reduce((sum, s) => sum + s.areaSqFt, 0);
 
         const materialCost = totalProfileCost + totalGlassCost + totalAccessoryCost;
         const laborCost = laborItemized
@@ -612,7 +625,6 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         taxRate,
         discountType,
         discountValue,
-        overallAreaSqFt,
         installation,
         transportation,
     ]);
@@ -799,9 +811,42 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                     </div>
                 )}
 
+                {/* Step indicator */}
+                <div className="bg-surface border border-border rounded-xl shadow-sm p-4 sm:p-5">
+                    <div className="flex items-center">
+                        {STEPS.map((s, i) => (
+                            <div key={s.key} className={`flex items-center ${i < STEPS.length - 1 ? "flex-1" : ""}`}>
+                                <button
+                                    type="button"
+                                    onClick={() => setStep(i)}
+                                    className="flex items-center gap-2 shrink-0"
+                                >
+                                    <span
+                                        className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold shrink-0 transition-colors ${i === step
+                                            ? "bg-primary text-primary-foreground"
+                                            : i < step
+                                                ? "bg-success text-white"
+                                                : "bg-surface-muted text-text-muted border border-border-strong"
+                                            }`}
+                                    >
+                                        {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                                    </span>
+                                    <span className={`text-sm hidden sm:inline ${i === step ? "font-semibold text-text" : "text-text-muted"}`}>
+                                        {s.label}
+                                    </span>
+                                </button>
+                                {i < STEPS.length - 1 && (
+                                    <div className={`flex-1 h-px mx-3 ${i < step ? "bg-success" : "bg-border"}`} />
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="md:col-span-3 space-y-6">
-                        {/* Client Details */}
+                        {/* Step 1: Client Details */}
+                        {step === 0 && (
                         <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-4">
                             <h2 className="font-semibold text-lg text-text border-b pb-2">Client Details</h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -828,8 +873,10 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                             </div>
                             <p className="text-xs text-text-muted">Quote No. will be generated automatically when you save.</p>
                         </div>
+                        )}
 
-                        {worksheetId ? (
+                        {/* Step 2: Rates & Sections (worksheet) or Window Sections (manual) */}
+                        {step === 1 && (worksheetId ? (
                             <>
                                 {/* Rates by System Type — sections sharing the same aluminium
                                     system automatically share these rates; a different system
@@ -1141,13 +1188,15 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                     />
                                 ))}
                             </div>
-                        )}
+                        ))}
 
-                        {/* Overheads */}
+                        {/* Step 3: Costs & Margins */}
+                        {step === 2 && (
                         <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-4">
                             <h2 className="font-semibold text-lg text-text border-b pb-2">Costs & Margins</h2>
 
                             <div className="space-y-2">
+                                <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Labor</h3>
                                 <div className="flex items-center justify-between">
                                     <Label>Labor Cost</Label>
                                     <label className="flex items-center gap-1.5 text-xs text-text-muted">
@@ -1223,6 +1272,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                 )}
                             </div>
 
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted pt-2 border-t border-border">Margins &amp; Tax</h3>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div>
                                     <Label>Overhead/Misc</Label>
@@ -1263,7 +1313,8 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border">
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted pt-2 border-t border-border">Included Services</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="flex items-center gap-2 text-sm font-medium text-text">
                                         <input type="checkbox" checked={installationIncluded} onChange={(e) => setInstallationIncluded(e.target.checked)} />
@@ -1290,6 +1341,35 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                 </div>
                             </div>
                         </div>
+                        )}
+
+                        {/* Step 4: Review & Terms */}
+                        {step === 3 && (
+                        <>
+                        <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-4">
+                            <h2 className="font-semibold text-lg text-text border-b pb-2">Review</h2>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                                <div>
+                                    <div className="text-text-muted text-xs uppercase font-semibold">Client</div>
+                                    <div className="text-text font-medium">{clientName || "—"}</div>
+                                </div>
+                                <div>
+                                    <div className="text-text-muted text-xs uppercase font-semibold">Sections</div>
+                                    <div className="text-text font-medium">{totals.sectionBreakdowns.length}</div>
+                                </div>
+                                <div>
+                                    <div className="text-text-muted text-xs uppercase font-semibold">Total Area</div>
+                                    <div className="text-text font-medium">{totals.overallAreaSqFt.toFixed(1)} sq.ft</div>
+                                </div>
+                                <div>
+                                    <div className="text-text-muted text-xs uppercase font-semibold">Quote Total</div>
+                                    <div className="text-text font-medium">{formatCurrency(totals.finalTotal)}</div>
+                                </div>
+                            </div>
+                            {!clientName.trim() && (
+                                <p className="text-xs text-warning">No client name set — go back to Client to add one.</p>
+                            )}
+                        </div>
 
                         {/* Terms */}
                         <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-3">
@@ -1301,6 +1381,27 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                 className="w-full rounded-md border border-border px-3 py-2 text-sm text-text"
                                 placeholder="One line per term — shown at the bottom of the printed quotation."
                             />
+                        </div>
+                        </>
+                        )}
+
+                        {/* Step navigation */}
+                        <div className="flex items-center justify-between pt-2">
+                            <Button type="button" variant="outline" onClick={goBack} disabled={step === 0}>
+                                <ArrowLeft className="w-4 h-4 mr-2" />
+                                Back
+                            </Button>
+                            {step < STEPS.length - 1 ? (
+                                <Button type="button" onClick={goNext}>
+                                    Next
+                                    <ArrowRight className="w-4 h-4 ml-2" />
+                                </Button>
+                            ) : (
+                                <Button type="button" onClick={() => handleSave("final")} isLoading={saving === "final"} disabled={saving !== null}>
+                                    <Save className="w-4 h-4 mr-2" />
+                                    {isEditMode ? "Save & View" : "Generate Quote"}
+                                </Button>
+                            )}
                         </div>
                     </div>
 

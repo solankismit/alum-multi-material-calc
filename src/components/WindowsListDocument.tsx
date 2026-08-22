@@ -14,18 +14,23 @@ interface WindowsListDocumentProps {
     worksheetName: string;
     createdAt: Date;
     input: WindowInput | null;
+    /** True when rendered as a tab inside WorksheetHub rather than its own
+     * page — suppresses the outer page chrome the hub already provides. */
+    embedded?: boolean;
 }
 
-export default function WindowsListDocument({ worksheetId, worksheetName, createdAt, input }: WindowsListDocumentProps) {
+export default function WindowsListDocument({ worksheetId, worksheetName, createdAt, input, embedded = false }: WindowsListDocumentProps) {
     const handlePrint = () => window.print();
 
     if (!input) {
         return (
             <div className="p-8 text-center">
                 <h2 className="text-xl font-semibold text-red-600">No window data found.</h2>
-                <Link href={`/worksheets/${worksheetId}`}>
-                    <Button className="mt-4">Back to Worksheet</Button>
-                </Link>
+                {!embedded && (
+                    <Link href={`/worksheets/${worksheetId}`}>
+                        <Button className="mt-4">Back to Worksheet</Button>
+                    </Link>
+                )}
             </div>
         );
     }
@@ -45,16 +50,18 @@ export default function WindowsListDocument({ worksheetId, worksheetName, create
     });
 
     return (
-        <div className="min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 print:p-0 font-sans">
-            <PrintStyles />
-            <div className="max-w-5xl mx-auto space-y-6 print:space-y-4" id="printable-area">
-                <div className="flex items-center justify-between print:hidden">
-                    <Link href={`/worksheets/${worksheetId}`}>
-                        <Button variant="ghost" className="pl-0 hover:bg-transparent hover:text-slate-900">
-                            <ArrowLeft className="w-5 h-5 mr-2" />
-                            Back to Worksheet
-                        </Button>
-                    </Link>
+        <div className={embedded ? "font-sans" : "min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 print:p-0 font-sans"}>
+            {!embedded && <PrintStyles />}
+            <div className={embedded ? "space-y-6 print:space-y-4" : "max-w-5xl mx-auto space-y-6 print:space-y-4"} id="printable-area">
+                <div className="flex items-center justify-end print:hidden">
+                    {!embedded && (
+                        <Link href={`/worksheets/${worksheetId}`} className="mr-auto">
+                            <Button variant="ghost" className="pl-0 hover:bg-transparent hover:text-slate-900">
+                                <ArrowLeft className="w-5 h-5 mr-2" />
+                                Back to Worksheet
+                            </Button>
+                        </Link>
+                    )}
                     <div className="flex items-center gap-3">
                         <Button onClick={handlePrint} variant="outline" className="border-slate-300 shadow-sm">
                             <Printer className="w-4 h-4 mr-2" />

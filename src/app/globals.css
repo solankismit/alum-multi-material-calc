@@ -1,4 +1,10 @@
 @import "tailwindcss";
+/* Registers animate-in/animate-out, fade-in/out, slide-in/out-from-*, and
+ * zoom-in/out-* utilities for Tailwind v4. Without this, every one of those
+ * classes across the app (Dialog, Select, Toast, BottomSheet, and several
+ * hand-rolled reveal animations) silently compiles to nothing — no error,
+ * just no animation. */
+@import "tw-animate-css";
 
 /*
  * Semantic design tokens. Every color used across the app should resolve

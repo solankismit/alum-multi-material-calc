@@ -237,8 +237,11 @@ export default async function OrderbookPage({ searchParams }: OrderbookParams) {
     }
 
     return (
-        <div className="min-h-screen bg-surface-muted p-4 md:p-8 font-sans print:bg-white print:p-0">
-            <div className="max-w-5xl mx-auto space-y-6 md:space-y-8" id="printable-area">
+        <div className="min-h-screen bg-surface-muted px-4 sm:px-6 lg:px-8 py-4 md:py-8 font-sans print:bg-white print:p-0">
+            {/* Screen width matches the header's max-w-7xl; print keeps the
+                original max-w-5xl so the printed page is unaffected by
+                whatever width the screen happened to be shown at. */}
+            <div className="max-w-7xl print:max-w-5xl mx-auto space-y-6 md:space-y-8" id="printable-area">
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 print:hidden">
                     <Link href="/dashboard">

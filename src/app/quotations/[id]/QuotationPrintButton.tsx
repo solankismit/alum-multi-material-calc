@@ -30,12 +30,18 @@ export default function QuotationPrintButton({ id, label = "Print / Save PDF" }:
             setIsPrinting(false);
             setConfirmOpen(false);
         }
-        window.print();
+        // window.print() is synchronous and blocks until the OS print dialog
+        // closes — calling it immediately after setConfirmOpen(false) races
+        // React's render (and the dialog's own close animation), so the
+        // confirm dialog was still on screen when the print snapshot was
+        // taken. Deferring past the dialog's close transition lets it
+        // actually unmount first.
+        setTimeout(() => window.print(), 300);
     };
 
     return (
         <>
-            <Button onClick={() => setConfirmOpen(true)} variant="outline" isLoading={isPrinting}>
+            <Button onClick={() => setConfirmOpen(true)} isLoading={isPrinting}>
                 <Printer className="w-4 h-4 mr-2" />
                 {label}
             </Button>

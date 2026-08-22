@@ -1,5 +1,5 @@
 import { getOwnedWorksheet } from "@/lib/data-fetchers";
-import CuttingPlanDocument from "@/components/CuttingPlanDocument";
+import WorksheetHub from "@/components/WorksheetHub";
 import { AccessDenied } from "@/components/layout/AccessDenied";
 
 export default async function CuttingPlanPage({
@@ -14,12 +14,20 @@ export default async function CuttingPlanPage({
         return <AccessDenied message="You do not have permission to view this worksheet." />;
     }
 
+    let sectionName = undefined;
+    if (data.result && data.result.sectionResults?.length > 0) {
+        sectionName = data.result.sectionResults[0].sectionName;
+    }
+
     return (
-        <CuttingPlanDocument
+        <WorksheetHub
             worksheetId={worksheet.id}
             worksheetName={worksheet.name}
             createdAt={worksheet.createdAt}
+            input={data.input}
             result={data.result}
+            sectionName={sectionName}
+            initialTab="cutting-plan"
         />
     );
 }
