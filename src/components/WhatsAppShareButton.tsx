@@ -8,25 +8,12 @@ interface WhatsAppShareButtonProps {
     /** Pre-filled message text — used as the share caption on supported browsers,
      * or as the WhatsApp message body on the text-only fallback. */
     message: string;
-    /** Client/recipient phone number, any format — digits are extracted automatically.
-     * Only used by the text-only fallback (the Web Share API has no "recipient" concept;
-     * the user picks the chat themselves in the OS share sheet). */
-    phone?: string | null;
     /** id of the DOM element to render into the shared PDF. */
     elementId: string;
     /** Filename for the generated PDF. */
     filename: string;
     label?: string;
     className?: string;
-}
-
-function extractDigits(phone?: string | null): string {
-    if (!phone) return "";
-    // wa.me expects a full international number with no leading zero/plus/spaces.
-    // A bare 10-digit Indian mobile number is assumed to need the country code.
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length === 10) return `91${digits}`;
-    return digits.replace(/^0+/, "");
 }
 
 /** A small WhatsApp brand mark — lucide-react has no brand icon set, so this is
@@ -39,9 +26,13 @@ function WhatsAppIcon({ className }: { className?: string }) {
     );
 }
 
-function buildWaUrl(message: string, phone?: string | null) {
-    const digits = extractDigits(phone);
-    return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+/** No recipient number — always the "pick a chat yourself" intent, since a
+ * quotation's saved client phone is often missing/wrong/not-on-WhatsApp, and
+ * forcing wa.me to a specific number breaks the flow if that number isn't a
+ * valid WhatsApp contact. Letting WhatsApp's own UI pick the chat is simpler
+ * and always works. */
+function buildWaUrl(message: string) {
+    return `https://wa.me/?text=${encodeURIComponent(message)}`;
 }
 
 /**
@@ -52,7 +43,7 @@ function buildWaUrl(message: string, phone?: string | null) {
  * back to opening WhatsApp with just a pre-filled text message — the PDF
  * still needs to be saved (Print / Save PDF) and attached by hand there.
  */
-export default function WhatsAppShareButton({ message, phone, elementId, filename, label = "Share on WhatsApp", className = "" }: WhatsAppShareButtonProps) {
+export default function WhatsAppShareButton({ message, elementId, filename, label = "Share on WhatsApp", className = "" }: WhatsAppShareButtonProps) {
     const [sharing, setSharing] = useState(false);
 
     const handleShare = async () => {
@@ -83,12 +74,12 @@ export default function WhatsAppShareButton({ message, phone, elementId, filenam
             link.download = filename;
             link.click();
             URL.revokeObjectURL(blobUrl);
-            if (fallbackTab) fallbackTab.location.href = buildWaUrl(message, phone);
+            if (fallbackTab) fallbackTab.location.href = buildWaUrl(message);
         } catch (err) {
             // AbortError means the user cancelled the OS share sheet — not a real failure.
             if ((err as Error)?.name !== "AbortError") {
                 console.error("WhatsApp share failed:", err);
-                if (fallbackTab) fallbackTab.location.href = buildWaUrl(message, phone);
+                if (fallbackTab) fallbackTab.location.href = buildWaUrl(message);
             } else {
                 fallbackTab?.close();
             }
