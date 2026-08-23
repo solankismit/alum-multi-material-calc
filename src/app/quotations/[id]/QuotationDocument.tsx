@@ -129,7 +129,6 @@ export default function QuotationDocument({
                         <WhatsAppShareButton
                             elementId="printable-area"
                             filename={`Quotation-${quote.quotationNumber}.pdf`}
-                            phone={quote.clientPhone ?? undefined}
                             message={`Hi ${quote.clientName || "there"}, please find your quotation ${quote.quotationNumber} attached — total ${formatCurrency(quote.totalAmount ?? finalTotal)}. Thank you!${business.name ? ` — ${business.name}` : ""}`}
                         />
                         <QuotationPrintButton id={quote.id} label="Print / Save PDF" />
