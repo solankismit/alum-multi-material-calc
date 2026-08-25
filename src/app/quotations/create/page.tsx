@@ -47,9 +47,11 @@ export default async function CreateQuotationPage({
         initialQuotation = {
             id: quotation.id,
             pricingData: quotation.pricingData as unknown as PricingData,
+            customerId: quotation.customerId ?? null,
             clientName: quotation.clientName ?? "",
             clientPhone: quotation.clientPhone ?? "",
             clientAddress: quotation.clientAddress ?? "",
+            clientGstNumber: quotation.clientGstNumber ?? "",
             deliveryAddress: quotation.deliveryAddress ?? "",
             customerRef: quotation.customerRef ?? "",
         };

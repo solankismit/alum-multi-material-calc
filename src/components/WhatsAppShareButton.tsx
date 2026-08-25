@@ -1,17 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { generatePdfFile } from "@/utils/generatePdfBlob";
 
 interface WhatsAppShareButtonProps {
-    /** Pre-filled message text — used as the share caption on supported browsers,
-     * or as the WhatsApp message body on the text-only fallback. */
-    message: string;
-    /** id of the DOM element to render into the shared PDF. */
-    elementId: string;
-    /** Filename for the generated PDF. */
-    filename: string;
+    /** The file to share — generated elsewhere (see useSharePdf) and handed in
+     * once ready. Nothing about generating it is this component's concern. */
+    file: File | null;
+    /** Pre-filled message text, sent alongside the file as the share caption. */
+    message?: string;
     label?: string;
     className?: string;
 }
@@ -26,66 +22,31 @@ function WhatsAppIcon({ className }: { className?: string }) {
     );
 }
 
-/** No recipient number — always the "pick a chat yourself" intent, since a
- * quotation's saved client phone is often missing/wrong/not-on-WhatsApp, and
- * forcing wa.me to a specific number breaks the flow if that number isn't a
- * valid WhatsApp contact. Letting WhatsApp's own UI pick the chat is simpler
- * and always works. */
-function buildWaUrl(message: string) {
-    return `https://wa.me/?text=${encodeURIComponent(message)}`;
-}
-
 /**
- * Shares the rendered document as an actual PDF via the Web Share API (which
- * puts WhatsApp in the OS share sheet with the file pre-attached) on browsers
- * that support sharing files — mainly Chrome on Android and recent desktop
- * Chrome/Edge. Safari and Firefox don't support file sharing, so those fall
- * back to opening WhatsApp with just a pre-filled text message — the PDF
- * still needs to be saved (Print / Save PDF) and attached by hand there.
+ * Shares `file` via the Web Share API (which puts WhatsApp in the OS share
+ * sheet with the file pre-attached). Renders nothing at all — no disabled
+ * state, no text-only fallback — unless the browser can actually share this
+ * exact file: mainly Chrome on Android and recent desktop Chrome/Edge over
+ * HTTPS. Safari, Firefox, and any insecure (non-HTTPS) context can't share
+ * files this way, so the button simply doesn't appear there.
  */
-export default function WhatsAppShareButton({ message, elementId, filename, label = "Share on WhatsApp", className = "" }: WhatsAppShareButtonProps) {
-    const [sharing, setSharing] = useState(false);
+export default function WhatsAppShareButton({ file, message, label = "Share on WhatsApp", className = "" }: WhatsAppShareButtonProps) {
+    const canShareFile =
+        !!file &&
+        typeof navigator !== "undefined" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] });
 
-    const handleShare = async () => {
-        // PDF generation below is async, and by the time it resolves the browser
-        // may no longer treat this as "triggered by a user gesture" — a fallback
-        // window.open() at that point gets silently popup-blocked. Opening a
-        // blank tab synchronously, here, inside the click handler, preserves
-        // that gesture; its location gets pointed at the real URL once ready.
-        const fallbackTab = window.open("", "_blank");
+    if (!canShareFile) return null;
 
-        setSharing(true);
-        try {
-            const file = await generatePdfFile(elementId, filename);
-            const canShareFile = typeof navigator.canShare === "function" && navigator.canShare({ files: [file] });
 
-            if (canShareFile && navigator.share) {
-                fallbackTab?.close();
-                await navigator.share({ files: [file], text: message });
-                return;
-            }
-
-            // Fallback: hand the user the PDF directly, then point the
-            // pre-opened tab at WhatsApp with the message text pre-filled so
-            // they only have to attach the file.
-            const blobUrl = URL.createObjectURL(file);
-            const link = document.createElement("a");
-            link.href = blobUrl;
-            link.download = filename;
-            link.click();
-            URL.revokeObjectURL(blobUrl);
-            if (fallbackTab) fallbackTab.location.href = buildWaUrl(message);
-        } catch (err) {
+    const handleShare = () => {
+        navigator.share({ files: [file as File], text: message }).catch((err) => {
             // AbortError means the user cancelled the OS share sheet — not a real failure.
             if ((err as Error)?.name !== "AbortError") {
                 console.error("WhatsApp share failed:", err);
-                if (fallbackTab) fallbackTab.location.href = buildWaUrl(message);
-            } else {
-                fallbackTab?.close();
             }
-        } finally {
-            setSharing(false);
-        }
+        });
     };
 
     return (
@@ -93,11 +54,10 @@ export default function WhatsAppShareButton({ message, elementId, filename, labe
             type="button"
             onClick={handleShare}
             variant="outline"
-            isLoading={sharing}
             className={`border-slate-300 text-[#25D366] hover:bg-[#25D366]/10 ${className}`}
         >
-            {!sharing && <WhatsAppIcon className="w-4 h-4 mr-2" />}
-            {sharing ? "Preparing PDF..." : label}
+            <WhatsAppIcon className="w-4 h-4 mr-2" />
+            {label}
         </Button>
     );
 }

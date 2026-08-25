@@ -11,6 +11,13 @@ export default function PrintStyles() {
                 @page {
                     size: A4;
                     margin: 10mm;
+                    /* Page X of Y — Firefox/Chrome both support the
+                       page/pages counters inside an @page margin box. */
+                    @bottom-right {
+                        content: "Page " counter(page) " of " counter(pages);
+                        font-size: 8pt;
+                        color: #94a3b8;
+                    }
                 }
                 html, body {
                     -webkit-print-color-adjust: exact;
@@ -22,6 +29,13 @@ export default function PrintStyles() {
                 }
                 tr, li {
                     break-inside: avoid;
+                }
+                /* Without this, a table's header row (HSN/Rate/GST/Amount
+                   columns) only prints on page 1 — every row on later pages
+                   becomes an unlabeled number, which is a real defect on a
+                   legal document, not just cosmetic. */
+                thead {
+                    display: table-header-group;
                 }
             }
         `}</style>

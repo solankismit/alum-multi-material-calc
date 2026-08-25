@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Printer, ArrowLeft, Download, Receipt, Scissors, List } from "lucide-react";
 import Link from "next/link";
 import { CalculationResult, WindowInput } from "@/types";
@@ -10,6 +10,7 @@ import { aggregatePlans, getPieceDescription, getPieceColorClass } from "@/utils
 import { resolveMaterialCategory, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
 import PrintStyles from "@/components/PrintStyles";
 import WhatsAppShareButton from "@/components/WhatsAppShareButton";
+import { useSharePdf } from "@/hooks/useSharePdf";
 import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 
 interface WorksheetReportProps {
@@ -47,6 +48,8 @@ export default function WorksheetReport({
     const handlePrint = () => {
         window.print();
     };
+    const printableRef = useRef<HTMLDivElement>(null);
+    const sharePdfFile = useSharePdf(printableRef, `Worksheet-Report-${worksheetName}.pdf`);
 
     if (!result) {
         return (
@@ -72,7 +75,7 @@ export default function WorksheetReport({
     return (
         <div className={embedded ? "font-sans" : "min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 print:p-0 font-sans"}>
             {!embedded && <PrintStyles />}
-            <div className={embedded ? "space-y-8 print:space-y-6" : "max-w-6xl mx-auto space-y-8 print:space-y-6"} id="printable-area">
+            <div ref={printableRef} className={embedded ? "space-y-8 print:space-y-6" : "max-w-6xl mx-auto space-y-8 print:space-y-6"} id="printable-area">
 
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
@@ -114,8 +117,7 @@ export default function WorksheetReport({
                             Print / Save PDF
                         </Button>
                         <WhatsAppShareButton
-                            elementId="printable-area"
-                            filename={`Worksheet-Report-${worksheetName}.pdf`}
+                            file={sharePdfFile}
                             message={`Worksheet report for ${worksheetName}.`}
                         />
                         <div className="h-6 w-px bg-slate-200 mx-1 hidden sm:block" aria-hidden="true" />

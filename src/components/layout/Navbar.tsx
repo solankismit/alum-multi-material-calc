@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calculator, LayoutDashboard, Settings, LogOut, Menu, X, User, Receipt, ShieldCheck } from "lucide-react";
+import { Calculator, LayoutDashboard, Settings, LogOut, Menu, X, User, Receipt, FileCheck, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { BottomSheet, BottomSheetContent } from "@/components/ui/BottomSheet";
@@ -48,6 +48,7 @@ export default function Navbar({ user }: NavbarProps) {
         { href: "/", label: "Calculator", icon: Calculator },
         ...(user ? [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
         ...(user ? [{ href: "/quotations", label: "Quotations", icon: Receipt }] : []),
+        ...(user ? [{ href: "/invoices", label: "Invoices", icon: FileCheck }] : []),
         ...(user?.role === "ADMIN" ? [{ href: "/admin", label: "Admin", icon: ShieldCheck }] : []),
     ];
 

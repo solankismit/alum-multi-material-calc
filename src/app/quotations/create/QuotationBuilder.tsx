@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency, AREA_SQMM_PER_SQFT } from "@/utils/formatters";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { ArrowLeft, ArrowRight, Save, FileText, Plus, Trash2, Check } from "lucide-react";
 import Link from "next/link";
 import { createQuotation, updateQuotation } from "../actions";
+import { listCustomers, createCustomer, type CustomerInput } from "@/app/customers/actions";
+import { isValidGstFormat } from "@/utils/validation";
 import { resolveMaterialCategory, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
 import { calculateLaborCost, type LaborMode } from "@/utils/laborCost";
 import {
@@ -52,9 +55,11 @@ export interface RateCardData {
 export interface InitialQuotation {
     id: string;
     pricingData: PricingData;
+    customerId: string | null;
     clientName: string;
     clientPhone: string;
     clientAddress: string;
+    clientGstNumber: string;
     deliveryAddress: string;
     customerRef: string;
 }
@@ -369,11 +374,57 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
     const [transportationNote, setTransportationNote] = useState(seedPricing?.transportation?.note ?? "");
 
     // Metadata
+    const [customerId, setCustomerId] = useState<string | null>(initialQuotation?.customerId ?? null);
     const [clientName, setClientName] = useState(initialQuotation?.clientName ?? "");
     const [clientPhone, setClientPhone] = useState(initialQuotation?.clientPhone ?? "");
     const [clientAddress, setClientAddress] = useState(initialQuotation?.clientAddress ?? "");
+    const [clientGstNumber, setClientGstNumber] = useState(initialQuotation?.clientGstNumber ?? "");
     const [deliveryAddress, setDeliveryAddress] = useState(initialQuotation?.deliveryAddress ?? "");
     const [customerRef, setCustomerRef] = useState(initialQuotation?.customerRef ?? "");
+
+    // Saved customers — fetched once; picking one overwrites the typed client
+    // fields (per the design review's explicit "overwrite, not merge" decision).
+    const [customers, setCustomers] = useState<{ id: string; name: string; phone: string | null; address: string | null; gstNumber: string | null }[]>([]);
+    const [savingCustomer, setSavingCustomer] = useState(false);
+    useEffect(() => {
+        listCustomers().then((res) => {
+            if (res.success) setCustomers(res.data);
+        });
+    }, []);
+
+    const handleSelectCustomer = (id: string) => {
+        if (id === "__new__") {
+            setCustomerId(null);
+            return;
+        }
+        const customer = customers.find((c) => c.id === id);
+        if (!customer) return;
+        setCustomerId(customer.id);
+        setClientName(customer.name);
+        setClientPhone(customer.phone ?? "");
+        setClientAddress(customer.address ?? "");
+        setClientGstNumber(customer.gstNumber ?? "");
+    };
+
+    const handleSaveAsCustomer = async () => {
+        if (!clientName.trim()) return;
+        setSavingCustomer(true);
+        try {
+            const input: CustomerInput = { name: clientName, phone: clientPhone || undefined, address: clientAddress || undefined, gstNumber: clientGstNumber || undefined };
+            const res = await createCustomer(input);
+            if (res.success && res.data) {
+                setCustomers((prev) => [...prev, res.data].sort((a, b) => a.name.localeCompare(b.name)));
+                setCustomerId(res.data.id);
+                toast("Saved as a reusable customer.");
+            } else {
+                toast(res.error || "Failed to save customer", "error");
+            }
+        } finally {
+            setSavingCustomer(false);
+        }
+    };
+
+    const clientGstWarning = clientGstNumber.trim() && !isValidGstFormat(clientGstNumber) ? "Doesn't look like a valid GSTIN — you can still save." : null;
 
     // Step flow — purely a presentation concern layered on top of the existing
     // state above. Nothing about validation, pricing, or save behavior changes:
@@ -735,9 +786,11 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
 
             const input = {
                 worksheetId,
+                customerId,
                 clientName,
                 clientPhone,
                 clientAddress,
+                clientGstNumber,
                 deliveryAddress: deliveryAddress || clientAddress,
                 customerRef,
                 pricingData,
@@ -849,10 +902,28 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                         {step === 0 && (
                         <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-4">
                             <h2 className="font-semibold text-lg text-text border-b pb-2">Client Details</h2>
+                            {customers.length > 0 ? (
+                                <div>
+                                    <Label>Saved Customer</Label>
+                                    <Select value={customerId ?? "__new__"} onValueChange={handleSelectCustomer}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Type a new client, or pick a saved one" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__new__">Type a new client…</SelectItem>
+                                            {customers.map((c) => (
+                                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-text-muted">Type a new client below — you can save them as a reusable customer once you&apos;ve filled in their details.</p>
+                            )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
                                     <Label>Client Name</Label>
-                                    <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Type name..." />
+                                    <Input value={clientName} onChange={(e) => { setClientName(e.target.value); setCustomerId(null); }} placeholder="Type name..." />
                                 </div>
                                 <div>
                                     <Label>Customer Ref</Label>
@@ -860,18 +931,30 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                 </div>
                                 <div>
                                     <Label>Phone</Label>
-                                    <Input value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="Optional" />
+                                    <Input value={clientPhone} onChange={(e) => { setClientPhone(e.target.value); setCustomerId(null); }} placeholder="Optional" />
                                 </div>
                                 <div>
                                     <Label>Bill To Address</Label>
                                     <Input value={clientAddress} onChange={(e) => setClientAddress(e.target.value)} placeholder="Optional" />
+                                </div>
+                                <div>
+                                    <Label>Client GST Number</Label>
+                                    <Input value={clientGstNumber} onChange={(e) => { setClientGstNumber(e.target.value); setCustomerId(null); }} placeholder="Optional" />
+                                    {clientGstWarning && <p className="text-xs text-warning mt-1">{clientGstWarning}</p>}
                                 </div>
                                 <div className="sm:col-span-2 lg:col-span-2">
                                     <Label>Deliver To Address</Label>
                                     <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Same as Bill To if left blank" />
                                 </div>
                             </div>
-                            <p className="text-xs text-text-muted">Quote No. will be generated automatically when you save.</p>
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs text-text-muted">Quote No. will be generated automatically when you save.</p>
+                                {!customerId && clientName.trim() && (
+                                    <Button type="button" variant="ghost" size="sm" onClick={handleSaveAsCustomer} isLoading={savingCustomer}>
+                                        Save as reusable customer
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                         )}
 

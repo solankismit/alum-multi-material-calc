@@ -25,6 +25,7 @@ export default async function RateCardPage() {
         profitMarginDefault: rateCard?.profitMarginDefault ?? 0,
         taxRateDefault: rateCard?.taxRateDefault ?? 0,
         termsText: rateCard?.termsText ?? "",
+        hsnCodes: (rateCard?.hsnCodes as Record<string, string>) ?? {},
     };
 
     return (

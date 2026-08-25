@@ -16,6 +16,7 @@ const rateCardSchema = z.object({
     profitMarginDefault: z.number().min(0),
     taxRateDefault: z.number().min(0),
     termsText: z.string().default(""),
+    hsnCodes: z.record(z.string(), z.string()).default({}),
 });
 
 export async function GET() {

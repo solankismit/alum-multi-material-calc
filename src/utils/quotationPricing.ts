@@ -233,12 +233,18 @@ export function isQuotationLocked(quotation: { printedAt: Date | string | null; 
   return quotation.printedAt !== null || quotation.status !== "DRAFT";
 }
 
-/** Splits a single computed tax amount into CGST/SGST (intra-state) or IGST (inter-state) for display — the underlying rate/amount is unchanged, only how it's broken out. */
+/** Splits a single computed tax amount into CGST/SGST (intra-state) or IGST (inter-state) for display — the underlying rate/amount is unchanged, only how it's broken out.
+ * Each half is rounded to 2 decimal places, with any 1-paisa rounding remainder added
+ * to CGST — on a legal tax invoice, displayed CGST + SGST must sum to exactly the
+ * printed tax total, not silently drift by a paisa on odd amounts. */
 export function splitTax(taxAmount: number, taxType: TaxType | undefined): { cgst: number; sgst: number; igst: number } {
   if (taxType === "IGST") {
-    return { cgst: 0, sgst: 0, igst: taxAmount };
+    return { cgst: 0, sgst: 0, igst: Math.round(taxAmount * 100) / 100 };
   }
-  return { cgst: taxAmount / 2, sgst: taxAmount / 2, igst: 0 };
+  const totalPaise = Math.round(taxAmount * 100);
+  const sgstPaise = Math.floor(totalPaise / 2);
+  const cgstPaise = totalPaise - sgstPaise;
+  return { cgst: cgstPaise / 100, sgst: sgstPaise / 100, igst: 0 };
 }
 
 export interface TotalsInput {

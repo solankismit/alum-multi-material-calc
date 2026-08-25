@@ -8,13 +8,29 @@ import { isQuotationLocked, pricingDataSchema } from "@/utils/quotationPricing";
 
 export interface QuotationInput {
     worksheetId?: string | null;
+    customerId?: string | null;
     clientName: string;
     clientPhone?: string;
     clientAddress?: string;
+    clientGstNumber?: string;
     deliveryAddress?: string;
     customerRef?: string;
     pricingData: unknown; // JSON structure for rates — validated against pricingDataSchema before it's persisted
     totalAmount: number;
+}
+
+/** Client-identifying fields only — no pricing. Editable regardless of
+ * whether the quotation is locked (see isQuotationLocked): the lock exists
+ * to protect pricing integrity, not to freeze a typo in a client's name or
+ * a GST number learned after the quote was sent. */
+export interface QuotationClientDetailsInput {
+    customerId?: string | null;
+    clientName: string;
+    clientPhone?: string;
+    clientAddress?: string;
+    clientGstNumber?: string;
+    deliveryAddress?: string;
+    customerRef?: string;
 }
 
 /** Human-readable labels for the pricing schema's field names — used to turn a
@@ -113,9 +129,11 @@ export async function createQuotation(input: QuotationInput) {
             data: {
                 userId,
                 worksheetId: input.worksheetId || null,
+                customerId: input.customerId || null,
                 clientName: input.clientName,
                 clientPhone: input.clientPhone,
                 clientAddress: input.clientAddress,
+                clientGstNumber: input.clientGstNumber,
                 deliveryAddress: input.deliveryAddress,
                 customerRef: input.customerRef,
                 quotationNumber,
@@ -169,9 +187,11 @@ export async function updateQuotation(id: string, input: QuotationInput) {
             where: { id },
             data: {
                 worksheetId: input.worksheetId || null,
+                customerId: input.customerId || null,
                 clientName: input.clientName,
                 clientPhone: input.clientPhone,
                 clientAddress: input.clientAddress,
+                clientGstNumber: input.clientGstNumber,
                 deliveryAddress: input.deliveryAddress,
                 customerRef: input.customerRef,
                 pricingData: parsed.data as never,
@@ -185,6 +205,51 @@ export async function updateQuotation(id: string, input: QuotationInput) {
     } catch (error) {
         console.error("Update Quotation Error:", error);
         return { success: false, error: "Failed to update quotation" };
+    }
+}
+
+/** Updates only the client-identifying fields — never blocked by
+ * isQuotationLocked, since the lock protects pricing integrity, not this
+ * data (see the P1 "Lock scope correction" in the plan). */
+export async function updateQuotationClientDetails(id: string, input: QuotationClientDetailsInput) {
+    try {
+        const session = await getSession();
+        if (!session?.userId) {
+            return { success: false, error: "Unauthorized" };
+        }
+        const userId = session.userId as string;
+
+        const existing = await db.quotation.findUnique({ where: { id } });
+        if (!existing || existing.userId !== userId) {
+            return { success: false, error: "Not found or access denied" };
+        }
+
+        if (input.customerId) {
+            const customer = await db.customer.findFirst({ where: { id: input.customerId, userId } });
+            if (!customer) {
+                return { success: false, error: "Customer not found or access denied" };
+            }
+        }
+
+        await db.quotation.update({
+            where: { id },
+            data: {
+                customerId: input.customerId || null,
+                clientName: input.clientName,
+                clientPhone: input.clientPhone,
+                clientAddress: input.clientAddress,
+                clientGstNumber: input.clientGstNumber,
+                deliveryAddress: input.deliveryAddress,
+                customerRef: input.customerRef,
+            },
+        });
+
+        revalidatePath("/quotations");
+        revalidatePath(`/quotations/${id}`);
+        return { success: true, id };
+    } catch (error) {
+        console.error("Update Quotation Client Details Error:", error);
+        return { success: false, error: "Failed to update client details" };
     }
 }
 
@@ -232,9 +297,11 @@ export async function duplicateQuotation(id: string) {
             data: {
                 userId,
                 worksheetId: source.worksheetId,
+                customerId: source.customerId,
                 clientName: source.clientName,
                 clientPhone: source.clientPhone,
                 clientAddress: source.clientAddress,
+                clientGstNumber: source.clientGstNumber,
                 deliveryAddress: source.deliveryAddress,
                 customerRef: source.customerRef,
                 quotationNumber,
@@ -263,7 +330,21 @@ export async function getQuotation(id: string) {
             where: { id },
             include: {
                 worksheet: true,
-                user: { select: { company: true, businessAddress: true, businessPhone: true, gstNumber: true, name: true } },
+                customer: true,
+                user: {
+                    select: {
+                        company: true,
+                        businessAddress: true,
+                        businessPhone: true,
+                        gstNumber: true,
+                        name: true,
+                        logoUrl: true,
+                        bankAccountName: true,
+                        bankAccountNumber: true,
+                        bankIfsc: true,
+                        bankName: true,
+                    },
+                },
             },
         });
 

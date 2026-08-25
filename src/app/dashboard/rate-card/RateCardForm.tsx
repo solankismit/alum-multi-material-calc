@@ -23,6 +23,7 @@ interface RateCardData {
     profitMarginDefault: number;
     taxRateDefault: number;
     termsText: string;
+    hsnCodes: Record<string, string>;
 }
 
 interface RateCardFormProps {
@@ -103,6 +104,88 @@ function NamedRateList({
             <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
                 <Input
                     placeholder={placeholder}
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAdd())}
+                    className="flex-1"
+                />
+                <Button type="button" size="sm" variant="outline" onClick={handleAdd}>
+                    <Plus className="w-4 h-4 mr-1" /> Add
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+function NamedTextList({
+    title,
+    hint,
+    namePlaceholder,
+    valuePlaceholder,
+    values,
+    onChange,
+}: {
+    title: string;
+    hint: string;
+    namePlaceholder: string;
+    valuePlaceholder: string;
+    values: Record<string, string>;
+    onChange: (next: Record<string, string>) => void;
+}) {
+    const [newName, setNewName] = useState("");
+    const entries = Object.entries(values);
+
+    const handleAdd = () => {
+        const name = newName.trim();
+        if (!name || name in values) return;
+        onChange({ ...values, [name]: "" });
+        setNewName("");
+    };
+
+    const handleRemove = (name: string) => {
+        const next = { ...values };
+        delete next[name];
+        onChange(next);
+    };
+
+    const handleValueChange = (name: string, value: string) => {
+        onChange({ ...values, [name]: value });
+    };
+
+    return (
+        <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-3">
+            <div>
+                <h3 className="font-semibold text-slate-800">{title}</h3>
+                <p className="text-xs text-slate-500">{hint}</p>
+            </div>
+
+            {entries.length > 0 && (
+                <div className="space-y-2">
+                    {entries.map(([name, value]) => (
+                        <div key={name} className="flex items-center gap-2">
+                            <span className="flex-1 text-sm text-slate-700">{name}</span>
+                            <Input
+                                value={value}
+                                placeholder={valuePlaceholder}
+                                onChange={(e) => handleValueChange(name, e.target.value)}
+                                className="w-40"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => handleRemove(name)}
+                                className="text-slate-400 hover:text-red-500"
+                                title="Remove"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                <Input
+                    placeholder={namePlaceholder}
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAdd())}
@@ -255,6 +338,15 @@ export default function RateCardForm({ initial }: RateCardFormProps) {
                     </div>
                 </div>
             </div>
+
+            <NamedTextList
+                title="HSN Codes (for invoicing)"
+                hint="One HSN code per item/category you sell — used to populate the dropdown on each invoice line. No default is guessed for you; check the correct code with your CA or GST filings."
+                namePlaceholder="e.g. Aluminium Window Section"
+                valuePlaceholder="HSN code"
+                values={data.hsnCodes}
+                onChange={(hsnCodes) => setData({ ...data, hsnCodes })}
+            />
 
             <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-3">
                 <h3 className="font-semibold text-slate-800">Terms & Conditions</h3>

@@ -9,12 +9,7 @@
  * backgrounds, tables, simple SVGs); not a substitute for a real HTML→PDF
  * renderer if pixel-perfect text selection in the PDF ever matters.
  */
-export async function generatePdfFile(elementId: string, filename: string): Promise<File> {
-    const element = document.getElementById(elementId);
-    if (!element) {
-        throw new Error(`Could not find element #${elementId} to export`);
-    }
-
+export async function generatePdfFile(element: HTMLElement, filename: string): Promise<File> {
     const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
         import("html2canvas"),
         import("jspdf"),

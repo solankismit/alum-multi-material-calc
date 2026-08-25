@@ -8,7 +8,15 @@ const profileSchema = z.object({
     company: z.string().optional(),
     businessAddress: z.string().optional(),
     businessPhone: z.string().optional(),
+    // Format is checked client-side for an inline warning only — never
+    // rejected here. See src/utils/validation.ts and Tension 7 in the plan:
+    // hard-blocking on this single-error-message route would lock a user
+    // out of unrelated field edits over a legacy non-conformant value.
     gstNumber: z.string().optional(),
+    bankAccountName: z.string().optional(),
+    bankAccountNumber: z.string().optional(),
+    bankIfsc: z.string().optional(),
+    bankName: z.string().optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -33,6 +41,10 @@ export async function PATCH(req: NextRequest) {
                 businessAddress: result.data.businessAddress,
                 businessPhone: result.data.businessPhone,
                 gstNumber: result.data.gstNumber,
+                bankAccountName: result.data.bankAccountName,
+                bankAccountNumber: result.data.bankAccountNumber,
+                bankIfsc: result.data.bankIfsc,
+                bankName: result.data.bankName,
             },
         });
 

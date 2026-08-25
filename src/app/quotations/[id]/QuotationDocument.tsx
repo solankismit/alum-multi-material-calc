@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { formatCurrency } from "@/utils/formatters";
 import QuotationPrintButton from "./QuotationPrintButton";
@@ -8,9 +8,12 @@ import QuotationHeaderActions from "./QuotationHeaderActions";
 import QuotationStatusActions from "./QuotationStatusActions";
 import WindowSchematic from "@/components/WindowSchematic";
 import WhatsAppShareButton from "@/components/WhatsAppShareButton";
+import { useSharePdf } from "@/hooks/useSharePdf";
 import PrintStyles from "@/components/PrintStyles";
+import EditClientDetailsButton from "./EditClientDetailsButton";
 import { Eye, EyeOff } from "lucide-react";
 import type { PricingData } from "@/utils/quotationPricing";
+import type { CompanySnapshot } from "@/utils/companyConfig";
 import type { QuotationStatus } from "@prisma/client";
 
 const DEFAULT_TERMS = "Payment terms: 50% advance, balance upon completion.\nValid for 30 days from date of issue.";
@@ -27,15 +30,25 @@ interface DiagramSection {
     heightMm?: number;
 }
 
+interface Customer {
+    id: string;
+    name: string;
+    phone: string | null;
+    address: string | null;
+    gstNumber: string | null;
+}
+
 interface QuotationDocumentProps {
     quote: {
         id: string;
         quotationNumber: string | null;
         createdAt: Date;
         customerRef: string | null;
+        customerId: string | null;
         clientName: string | null;
         clientPhone: string | null;
         clientAddress: string | null;
+        clientGstNumber: string | null;
         deliveryAddress: string | null;
         totalAmount: number | null;
         printedAt: Date | null;
@@ -43,11 +56,12 @@ interface QuotationDocumentProps {
         status: QuotationStatus;
         userName: string | null;
     };
+    customers: Customer[];
     pricing: PricingData;
     taxType: "CGST_SGST" | "IGST";
     usesSections: boolean;
     diagramSections: DiagramSection[];
-    business: { name: string; address?: string | null; phone?: string | null; gst?: string | null };
+    business: CompanySnapshot;
     locked: boolean;
     subTotal: number;
     discountAmount: number;
@@ -69,6 +83,7 @@ interface QuotationDocumentProps {
  */
 export default function QuotationDocument({
     quote,
+    customers,
     pricing,
     taxType,
     usesSections,
@@ -84,6 +99,11 @@ export default function QuotationDocument({
     finalTotal,
 }: QuotationDocumentProps) {
     const [isInternal, setIsInternal] = useState(false);
+
+    const [logoFailed, setLogoFailed] = useState(false);
+
+    const printableRef = useRef<HTMLDivElement>(null);
+    const sharePdfFile = useSharePdf(printableRef, `Quotation-${quote.quotationNumber}.pdf`);
 
     const showLaborRow = (pricing.labor ?? 0) > 0;
     const showOverheadRow = isInternal && (pricing.overhead ?? 0) > 0;
@@ -115,7 +135,7 @@ export default function QuotationDocument({
             {/* Screen width matches the header's max-w-7xl; print keeps the
                 original max-w-4xl so the printed page is unaffected by
                 whatever width the screen happened to be shown at. */}
-            <div className="max-w-7xl print:max-w-4xl mx-auto bg-surface shadow-lg print:shadow-none p-8 md:p-12 print:p-0 text-sm print:text-[11px]" id="printable-area">
+            <div ref={printableRef} className="max-w-7xl print:max-w-4xl mx-auto bg-surface shadow-lg print:shadow-none p-8 md:p-12 print:p-0 text-sm print:text-[11px]" id="printable-area">
 
                 {/* Header Actions (Hidden continuously in print) — stacks on
                     narrow screens and groups by kind (navigate/edit, status,
@@ -127,8 +147,7 @@ export default function QuotationDocument({
                         <QuotationStatusActions id={quote.id} status={quote.status} />
                         <div className="h-6 w-px bg-border mx-1 hidden sm:block" aria-hidden="true" />
                         <WhatsAppShareButton
-                            elementId="printable-area"
-                            filename={`Quotation-${quote.quotationNumber}.pdf`}
+                            file={sharePdfFile}
                             message={`Hi ${quote.clientName || "there"}, please find your quotation ${quote.quotationNumber} attached — total ${formatCurrency(quote.totalAmount ?? finalTotal)}. Thank you!${business.name ? ` — ${business.name}` : ""}`}
                         />
                         <QuotationPrintButton id={quote.id} label="Print / Save PDF" />
@@ -153,11 +172,22 @@ export default function QuotationDocument({
                         <h1 className="text-4xl font-bold text-slate-900 mb-2 print:text-2xl print:mb-1">QUOTATION</h1>
                         <p className="text-slate-500">#{quote.quotationNumber}</p>
                     </div>
-                    <div className="text-right">
-                        <div className="font-bold text-xl text-slate-800 print:text-base">{business.name}</div>
-                        {business.address && <div className="text-slate-500 text-sm print:text-xs">{business.address}</div>}
-                        {business.phone && <div className="text-slate-500 text-sm print:text-xs">{business.phone}</div>}
-                        {business.gst && <div className="text-slate-500 text-sm print:text-xs">GST: {business.gst}</div>}
+                    <div className="text-right flex flex-col items-end gap-2">
+                        {business.logoUrl && !logoFailed && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                                src={business.logoUrl}
+                                alt={`${business.name} logo`}
+                                className="h-12 print:h-8 object-contain"
+                                onError={() => setLogoFailed(true)}
+                            />
+                        )}
+                        <div>
+                            <div className="font-bold text-xl text-slate-800 print:text-base">{business.name}</div>
+                            {business.address && <div className="text-slate-500 text-sm print:text-xs">{business.address}</div>}
+                            {business.phone && <div className="text-slate-500 text-sm print:text-xs">{business.phone}</div>}
+                            {business.gstNumber && <div className="text-slate-500 text-sm print:text-xs">GST: {business.gstNumber}</div>}
+                        </div>
                     </div>
                 </div>
 
@@ -184,10 +214,26 @@ export default function QuotationDocument({
                 {/* Client Info */}
                 <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 gap-8 print:gap-3 mb-12 print:mb-4 print:break-inside-avoid">
                     <div>
-                        <h3 className="text-slate-500 uppercase text-xs font-bold mb-2 print:mb-1">To</h3>
+                        <div className="flex items-center justify-between mb-2 print:mb-1">
+                            <h3 className="text-slate-500 uppercase text-xs font-bold">To</h3>
+                            <EditClientDetailsButton
+                                quotationId={quote.id}
+                                customers={customers}
+                                initial={{
+                                    customerId: quote.customerId,
+                                    clientName: quote.clientName,
+                                    clientPhone: quote.clientPhone,
+                                    clientAddress: quote.clientAddress,
+                                    clientGstNumber: quote.clientGstNumber,
+                                    deliveryAddress: quote.deliveryAddress,
+                                    customerRef: quote.customerRef,
+                                }}
+                            />
+                        </div>
                         <div className="text-xl font-semibold text-slate-800 print:text-sm">{quote.clientName || "Valued Client"}</div>
                         {quote.clientPhone && <div className="text-slate-500 text-sm print:text-xs mt-1">{quote.clientPhone}</div>}
                         {quote.clientAddress && <div className="text-slate-500 text-sm print:text-xs">{quote.clientAddress}</div>}
+                        {quote.clientGstNumber && <div className="text-slate-500 text-sm print:text-xs">GST: {quote.clientGstNumber}</div>}
                     </div>
                     {quote.deliveryAddress && quote.deliveryAddress !== quote.clientAddress && (
                         <div>

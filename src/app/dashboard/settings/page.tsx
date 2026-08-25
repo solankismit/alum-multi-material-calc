@@ -12,7 +12,19 @@ export default async function SettingsPage() {
     const session = await verifySession();
     const user = await db.user.findUnique({
         where: { id: session.userId },
-        select: { name: true, email: true, company: true, businessAddress: true, businessPhone: true, gstNumber: true },
+        select: {
+            name: true,
+            email: true,
+            company: true,
+            businessAddress: true,
+            businessPhone: true,
+            gstNumber: true,
+            logoUrl: true,
+            bankAccountName: true,
+            bankAccountNumber: true,
+            bankIfsc: true,
+            bankName: true,
+        },
     });
 
     if (!user) return redirect("/login");
@@ -33,6 +45,11 @@ export default async function SettingsPage() {
                             initialBusinessAddress={user.businessAddress || ""}
                             initialBusinessPhone={user.businessPhone || ""}
                             initialGstNumber={user.gstNumber || ""}
+                            initialLogoUrl={user.logoUrl}
+                            initialBankAccountName={user.bankAccountName || ""}
+                            initialBankAccountNumber={user.bankAccountNumber || ""}
+                            initialBankIfsc={user.bankIfsc || ""}
+                            initialBankName={user.bankName || ""}
                             email={user.email}
                         />
                     </CardContent>

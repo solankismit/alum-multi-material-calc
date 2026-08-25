@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Printer, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { CalculationResult } from "@/types";
@@ -8,6 +9,7 @@ import { aggregatePlans, getPieceDescription, getPieceColorClass } from "@/utils
 import { resolveMaterialCategory, MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
 import PrintStyles from "@/components/PrintStyles";
 import WhatsAppShareButton from "@/components/WhatsAppShareButton";
+import { useSharePdf } from "@/hooks/useSharePdf";
 
 interface CuttingPlanDocumentProps {
     worksheetId: string;
@@ -29,6 +31,8 @@ export default function CuttingPlanDocument({
     embedded = false,
 }: CuttingPlanDocumentProps) {
     const handlePrint = () => window.print();
+    const printableRef = useRef<HTMLDivElement>(null);
+    const sharePdfFile = useSharePdf(printableRef, `Cutting-Plan-${worksheetName}.pdf`);
 
     if (!result) {
         return (
@@ -50,7 +54,7 @@ export default function CuttingPlanDocument({
     return (
         <div className={embedded ? "font-sans" : "min-h-screen bg-slate-50 print:bg-white p-4 md:p-8 print:p-0 font-sans"}>
             {!embedded && <PrintStyles />}
-            <div className={embedded ? "space-y-6 print:space-y-4" : "max-w-5xl mx-auto space-y-6 print:space-y-4"} id="printable-area">
+            <div ref={printableRef} className={embedded ? "space-y-6 print:space-y-4" : "max-w-5xl mx-auto space-y-6 print:space-y-4"} id="printable-area">
 
                 {/* Header Actions */}
                 <div className="flex items-center justify-end print:hidden">
@@ -68,8 +72,7 @@ export default function CuttingPlanDocument({
                             Print / Save PDF
                         </Button>
                         <WhatsAppShareButton
-                            elementId="printable-area"
-                            filename={`Cutting-Plan-${worksheetName}.pdf`}
+                            file={sharePdfFile}
                             message={`Cutting plan for ${worksheetName}.`}
                         />
                     </div>

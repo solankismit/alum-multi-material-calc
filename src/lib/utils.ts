@@ -40,3 +40,12 @@ export const QUOTATION_STATUS_VARIANT: Record<string, BadgeVariant> = {
     ACCEPTED: "success",
     REJECTED: "danger",
 }
+
+/** Same pattern as QUOTATION_STATUS_VARIANT — one shared mapping so Invoice
+ * status colors aren't defined independently in the list and detail pages. */
+export const INVOICE_STATUS_VARIANT: Record<string, BadgeVariant> = {
+    DRAFT: "neutral",
+    ISSUED: "primary",
+    PAID: "success",
+    CANCELLED: "danger",
+}

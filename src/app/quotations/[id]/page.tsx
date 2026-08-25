@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { getQuotation } from "../actions";
+import { listCustomers } from "@/app/customers/actions";
 import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
-import { splitTax, isQuotationLocked, DEFAULT_TAX_TYPE, type PricingData } from "@/utils/quotationPricing";
+import { splitTax, isQuotationLocked, pricingDataSchema, DEFAULT_TAX_TYPE, type PricingData } from "@/utils/quotationPricing";
+import { getCompanySnapshot } from "@/utils/companyConfig";
 import type { WindowInput } from "@/types";
 import QuotationDocument from "./QuotationDocument";
 
@@ -28,7 +30,23 @@ export default async function QuotationView({ params }: PageProps) {
 
     const quote = res.data;
     const locked = isQuotationLocked(quote);
-    const pricing = quote.pricingData as unknown as PricingData;
+
+    // Validated on write (parsePricingData in actions.ts), but read here
+    // without re-validation until now — an unvalidated cast on a Json
+    // column that every render below assumes has a specific shape. A
+    // malformed record should surface a clear message, not crash mid-render.
+    const pricingParse = pricingDataSchema.safeParse(quote.pricingData);
+    if (!pricingParse.success) {
+        return (
+            <div className="p-8 text-center">
+                <p className="text-danger mb-4">This quotation&apos;s data looks corrupted and can&apos;t be displayed.</p>
+                <Link href="/quotations" className="text-primary hover:underline text-sm font-medium">
+                    &larr; Back to Quotations
+                </Link>
+            </div>
+        );
+    }
+    const pricing: PricingData = pricingParse.data;
     const taxType = pricing.taxType ?? DEFAULT_TAX_TYPE;
 
     // Quotations saved after the per-section pricing change carry `pricing.sections`
@@ -69,12 +87,9 @@ export default async function QuotationView({ params }: PageProps) {
     const taxSplit = splitTax(taxAmount, taxType);
     const finalTotal = discountedSubtotal + profitAmount + taxAmount;
 
-    const business = {
-        name: quote.user?.company || quote.user?.name || "Your Company",
-        address: quote.user?.businessAddress,
-        phone: quote.user?.businessPhone,
-        gst: quote.user?.gstNumber,
-    };
+    const business = quote.user ? getCompanySnapshot(quote.user) : getCompanySnapshot({});
+    const customersRes = await listCustomers();
+    const customers = customersRes.success ? customersRes.data : [];
 
     // Diagrams are only meaningful for a quotation created from a worksheet —
     // a direct/blank quotation has no window geometry to draw.
@@ -110,9 +125,11 @@ export default async function QuotationView({ params }: PageProps) {
                 quotationNumber: quote.quotationNumber,
                 createdAt: quote.createdAt,
                 customerRef: quote.customerRef,
+                customerId: quote.customerId,
                 clientName: quote.clientName,
                 clientPhone: quote.clientPhone,
                 clientAddress: quote.clientAddress,
+                clientGstNumber: quote.clientGstNumber,
                 deliveryAddress: quote.deliveryAddress,
                 totalAmount: quote.totalAmount,
                 printedAt: quote.printedAt,
@@ -120,6 +137,7 @@ export default async function QuotationView({ params }: PageProps) {
                 status: quote.status,
                 userName: quote.user?.name ?? null,
             }}
+            customers={customers}
             pricing={pricing}
             taxType={taxType}
             usesSections={usesSections}

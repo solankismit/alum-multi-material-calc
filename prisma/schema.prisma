@@ -21,23 +21,54 @@ enum Role {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  email           String   @unique
-  password        String
-  name            String?
-  role            Role     @default(USER)
-  company         String?
-  logoUrl         String?
-  businessAddress String?
-  businessPhone   String?
-  gstNumber       String?
-  quotationSeq    Int      @default(0) // atomically incremented to assign sequential quotation numbers
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                String   @id @default(uuid())
+  email             String   @unique
+  password          String
+  name              String?
+  role              Role     @default(USER)
+  company           String?
+  logoUrl           String?
+  businessAddress   String?
+  businessPhone     String?
+  gstNumber         String?
+  bankAccountName   String?
+  bankAccountNumber String?
+  bankIfsc          String?
+  bankName          String?
+  quotationSeq      Int      @default(0) // atomically incremented to assign sequential quotation numbers
+  invoiceSeq        Int      @default(0) // reset to 1 whenever invoiceSeqFY no longer matches the current financial year
+  invoiceSeqFY      String? // e.g. "2026-27" — the financial year invoiceSeq currently counts within
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   worksheets Worksheet[]
   quotations Quotation[]
+  customers  Customer[]
+  invoices   Invoice[]
   rateCard   RateCard?
+}
+
+// A saved buyer, scoped to the User (business owner) using this app — reusable
+// across quotations without retyping. Quotations/invoices copy this data at
+// selection time (never live-joined), so deleting a Customer never touches
+// documents that already reference it (see onDelete: SetNull below).
+model Customer {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  phone     String?
+  address   String?
+  gstNumber String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotations Quotation[]
+  invoices   Invoice[]
+
+  @@index([userId])
 }
 
 model SectionType {
@@ -131,9 +162,17 @@ model Quotation {
   // isQuotationLocked in src/utils/quotationPricing.ts).
   printedAt       DateTime?
 
+  // Optional link to a saved Customer — a convenience index, not the source
+  // of truth. Client fields below are always plain copies (set at selection
+  // time), so this quotation renders identically even after the Customer
+  // record is edited or deleted (onDelete: SetNull).
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
   clientName      String?
   clientPhone     String?
   clientAddress   String?
+  clientGstNumber String? // format-checked client-side, never blocking — see src/utils/validation.ts
   deliveryAddress String? // defaults to clientAddress in the UI when left blank
   customerRef     String?
 
@@ -141,11 +180,14 @@ model Quotation {
 
   totalAmount Float
 
+  invoices Invoice[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([worksheetId])
+  @@index([customerId])
 }
 
 // One reusable rate card per user — set prices once, every quotation pulls
@@ -177,5 +219,81 @@ model RateCard {
 
   termsText String @default("Payment terms: 50% advance, balance upon completion.\nValid for 30 days from date of issue.")
 
+  // { "<item/category name>": "<HSN code>" } — user-configured, no hardcoded
+  // default (the plan's original guess, 70071900, was factually wrong).
+  hsnCodes Json @default("{}")
+
   updatedAt DateTime @updatedAt
+}
+
+enum InvoiceStatus {
+  DRAFT // editable, no invoiceNumber assigned yet
+  ISSUED // number assigned; locked if INVOICE_LOCK_AFTER_PRINT=true
+  PAID
+  CANCELLED
+}
+
+model Invoice {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Both optional and independent — an Invoice is not tightly coupled to a
+  // Quotation (it can be generated from one, or created standalone).
+  quotationId String?
+  quotation   Quotation? @relation(fields: [quotationId], references: [id], onDelete: Restrict)
+  // Restrict is a cheap guard with no current user-facing consequence: no
+  // deleteQuotation action exists anywhere in the app today. Documented for
+  // when one is added, not a live behavior.
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  invoiceNumber String? // NULL until first finalize (see finalizeInvoice())
+  invoicePrefix String        @default("INV") // user-configurable, so a parallel invoicing system's numbers stay visually distinguishable
+  status        InvoiceStatus @default(DRAFT)
+  finalizedAt   DateTime?
+
+  // Buyer fields are plain columns, not a JSON snapshot — an Invoice often
+  // has no Quotation to source them from (the standalone case), so this
+  // data is first-class here either way.
+  buyerName      String
+  buyerAddress   String?
+  buyerGstNumber String?
+  buyerPhone     String?
+
+  gstRate Float? // invoice-level default GST rate; a line's own gstRate overrides this
+  taxType String @default("CGST_SGST") // "CGST_SGST" | "IGST" — one buyer/state per invoice, so this is invoice-level, not per-line (reuses the same TaxType shape as Quotation.pricingData.taxType)
+
+  // Frozen at finalize time via getCompanySnapshot(user) — never live-joined,
+  // so editing company settings later doesn't rewrite an issued invoice.
+  sellerSnapshot Json?
+
+  lines InvoiceLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, invoiceNumber])
+  @@index([userId])
+  @@index([quotationId])
+  @@index([customerId])
+}
+
+model InvoiceLine {
+  id        String  @id @default(uuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  description   String
+  quantity      Float? // e.g. 3507.29 — descriptive only; taxableAmount is still the source of truth
+  unit          String? // e.g. "Sq Ft" — free text, matches whatever unit the quotation section used
+  ratePerUnit   Float? // e.g. 650 — quantity * ratePerUnit informs taxableAmount but never overrides a manually entered one
+  taxableAmount Float // the whole line/section price — no labor/discount/overhead breakdown per line
+  hsnCode       String? // picked from RateCard.hsnCodes, or typed — never fuzzy-matched
+  gstRate       Float? // per-line override; null = use Invoice.gstRate
+
+  sortOrder Int @default(0)
+
+  @@index([invoiceId])
 }

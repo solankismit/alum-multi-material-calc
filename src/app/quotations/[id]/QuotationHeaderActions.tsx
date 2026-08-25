@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
-import { ArrowLeft, Copy, List, Pencil } from "lucide-react";
+import { ArrowLeft, Copy, List, Pencil, Receipt } from "lucide-react";
 import { duplicateQuotation } from "../actions";
 
 interface QuotationHeaderActionsProps {
@@ -62,6 +62,12 @@ export default function QuotationHeaderActions({ id, worksheetId, locked }: Quot
                 <Copy className="w-4 h-4 mr-2" />
                 Duplicate
             </Button>
+            <Link href={`/invoices/create?quotationId=${id}`}>
+                <Button variant="outline">
+                    <Receipt className="w-4 h-4 mr-2" />
+                    Generate Invoice
+                </Button>
+            </Link>
 
             <ConfirmDialog
                 open={confirmOpen}
