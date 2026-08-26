@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { saltAndHashPassword } from "@/lib/auth";
 import { createSession } from "@/lib/session";
 import { z } from "zod";
+import { DEFAULT_CUSTOM_FIELDS } from "@/utils/customFields";
 
 const registerSchema = z.object({
     email: z.string().email(),
@@ -38,14 +39,24 @@ export async function POST(req: NextRequest) {
 
         const hashedPassword = await saltAndHashPassword(password);
 
-        const user = await db.user.create({
-            data: {
-                email,
-                password: hashedPassword,
-                name,
-                company,
-                role: "USER", // Default role
-            },
+        // New users get the same starter field set existing users were
+        // migrated onto — seeded in the SAME transaction as user.create so a
+        // partial failure never leaves a real account with zero field
+        // definitions and a broken-looking empty details panel.
+        const user = await db.$transaction(async (tx) => {
+            const created = await tx.user.create({
+                data: {
+                    email,
+                    password: hashedPassword,
+                    name,
+                    company,
+                    role: "USER", // Default role
+                },
+            });
+            await tx.customFieldDefinition.createMany({
+                data: DEFAULT_CUSTOM_FIELDS.map((field) => ({ ...field, userId: created.id })),
+            });
+            return created;
         });
 
         await createSession(user.id, user.role);

@@ -12,11 +12,24 @@ import { useSharePdf } from "@/hooks/useSharePdf";
 import PrintStyles from "@/components/PrintStyles";
 import EditClientDetailsButton from "./EditClientDetailsButton";
 import { Eye, EyeOff } from "lucide-react";
-import type { PricingData } from "@/utils/quotationPricing";
+import type { ItemSpecDetails, PricingData } from "@/utils/quotationPricing";
 import type { CompanySnapshot } from "@/utils/companyConfig";
 import type { QuotationStatus } from "@prisma/client";
+import type { CustomFieldDefinitionData } from "@/utils/customFields";
 
 const DEFAULT_TERMS = "Payment terms: 50% advance, balance upon completion.\nValid for 30 days from date of issue.";
+
+/** Resolves each detail value to its definition's current label — single
+ * source of truth for the label (settings), not a second hardcoded copy on
+ * the print document. Falls back to the raw key for any value whose
+ * definition no longer exists at all, so data is never silently hidden. */
+function buildDetailRows(details: ItemSpecDetails, definitions: CustomFieldDefinitionData[]) {
+    const byKey = new Map(definitions.map((d) => [d.key, d]));
+    return Object.entries(details)
+        .filter(([, value]) => !!value)
+        .sort(([keyA], [keyB]) => (byKey.get(keyA)?.sortOrder ?? 999) - (byKey.get(keyB)?.sortOrder ?? 999))
+        .map(([key, value]) => ({ key, label: byKey.get(key)?.label ?? key, value }));
+}
 
 interface DiagramSection {
     id: string;
@@ -70,6 +83,7 @@ interface QuotationDocumentProps {
     taxRate: number;
     taxSplit: { igst: number; cgst: number; sgst: number };
     finalTotal: number;
+    customFieldDefinitions: CustomFieldDefinitionData[];
 }
 
 /**
@@ -97,6 +111,7 @@ export default function QuotationDocument({
     taxRate,
     taxSplit,
     finalTotal,
+    customFieldDefinitions,
 }: QuotationDocumentProps) {
     const [isInternal, setIsInternal] = useState(false);
 
@@ -289,24 +304,13 @@ export default function QuotationDocument({
                                                     {section.areaSqFt.toFixed(2)} sq.ft
                                                     {isInternal && typeof section.materialWastagePercent === "number" && ` — ${section.materialWastagePercent.toFixed(1)}% wastage`}
                                                 </div>
-                                                {section.details && (
+                                                {section.details && Object.keys(section.details).length > 0 && (
                                                     <div className="mt-1.5 mb-1.5 bg-slate-50 print:bg-transparent border border-slate-200 rounded-md px-2.5 py-1.5">
                                                         <div className="text-[10px] print:text-[9px] font-bold uppercase tracking-wide text-slate-400 mb-1">Specification</div>
                                                         <table className="text-xs print:text-[10px] w-full">
                                                             <tbody className="divide-y divide-slate-200/70">
-                                                                {([
-                                                                    ["Profile Brand", section.details.profileBrand],
-                                                                    ["Series", section.details.series],
-                                                                    ["Glass", section.details.glassSpec],
-                                                                    ["Profile Color", section.details.profileColor],
-                                                                    ["Bug Mesh", section.details.meshGrade],
-                                                                    ["Mesh Handle", section.details.meshHandle],
-                                                                    ["Locking", section.details.locking],
-                                                                    ["Handle Color", section.details.handleColor],
-                                                                    ["Hinge", section.details.hinge],
-                                                                    ["Notes", section.details.notes],
-                                                                ] as const).filter(([, value]) => !!value).map(([label, value]) => (
-                                                                    <tr key={label}>
+                                                                {buildDetailRows(section.details, customFieldDefinitions).map(({ key, label, value }) => (
+                                                                    <tr key={key}>
                                                                         <td className="pr-3 py-0.5 font-medium text-slate-500 whitespace-nowrap align-top w-28">{label}</td>
                                                                         <td className="py-0.5 text-slate-700 align-top">{value}</td>
                                                                     </tr>

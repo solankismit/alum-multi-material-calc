@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Receipt } from "lucide-react";
+import { Receipt, ListPlus } from "lucide-react";
 import { ProfileForm } from "./ProfileForm";
 import { PageContainer } from "@/components/layout/PageContainer";
 
@@ -65,6 +65,21 @@ export default async function SettingsPage() {
                             <Button variant="outline">
                                 <Receipt className="w-4 h-4 mr-2" />
                                 Manage Rate Card
+                            </Button>
+                        </Link>
+                    </CardContent>
+                </Card>
+
+                <Card className="mt-6">
+                    <CardHeader>
+                        <CardTitle>Quote Item Fields</CardTitle>
+                        <CardDescription>Choose which spec fields (color, glass, notes, etc.) show up on every quotation item — add your own, or turn ones off you don&apos;t use.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Link href="/dashboard/custom-fields">
+                            <Button variant="outline">
+                                <ListPlus className="w-4 h-4 mr-2" />
+                                Manage Fields
                             </Button>
                         </Link>
                     </CardContent>

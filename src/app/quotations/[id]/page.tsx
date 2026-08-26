@@ -8,6 +8,8 @@ import { splitTax, isQuotationLocked, pricingDataSchema, DEFAULT_TAX_TYPE, type 
 import { getCompanySnapshot } from "@/utils/companyConfig";
 import type { WindowInput } from "@/types";
 import QuotationDocument from "./QuotationDocument";
+import { verifySession } from "@/lib/session";
+import { db } from "@/lib/db";
 
 interface PageProps {
     params: Promise<{ id: string }>;
@@ -48,6 +50,15 @@ export default async function QuotationView({ params }: PageProps) {
     }
     const pricing: PricingData = pricingParse.data;
     const taxType = pricing.taxType ?? DEFAULT_TAX_TYPE;
+
+    // Single source of truth for a field's label — resolved here (not
+    // hardcoded on the document) so a renamed field shows its current label
+    // on every quotation, past and present.
+    const session = await verifySession();
+    const customFieldDefinitions = await db.customFieldDefinition.findMany({
+        where: { userId: session.userId as string },
+        orderBy: { sortOrder: "asc" },
+    });
 
     // Quotations saved after the per-section pricing change carry `pricing.sections`
     // (one cost breakdown per window type). Older / freeform quotations keep the
@@ -138,6 +149,7 @@ export default async function QuotationView({ params }: PageProps) {
                 userName: quote.user?.name ?? null,
             }}
             customers={customers}
+            customFieldDefinitions={customFieldDefinitions}
             pricing={pricing}
             taxType={taxType}
             usesSections={usesSections}

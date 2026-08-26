@@ -41,11 +41,46 @@ model User {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  worksheets Worksheet[]
-  quotations Quotation[]
-  customers  Customer[]
-  invoices   Invoice[]
-  rateCard   RateCard?
+  worksheets             Worksheet[]
+  quotations             Quotation[]
+  customers              Customer[]
+  invoices               Invoice[]
+  rateCard               RateCard?
+  customFieldDefinitions CustomFieldDefinition[]
+}
+
+enum CustomFieldType {
+  TEXT // single-line
+  TEXTAREA // multi-line
+  SELECT // dropdown / list of strings
+}
+
+// A user-configurable item-spec field (e.g. "Profile Color", "Glass Spec").
+// Seeded once per user with the set of fields that already had a real input
+// in the app (see scripts/seed-custom-field-definitions.ts) — never all 10
+// ItemSpecDetails keys, since 2 of them (profileBrand, series) never had an
+// input anywhere and seeding them would silently add new fields nobody
+// asked for. userId today, not organizationId — matches every other model
+// in this codebase pre-SaaS-multi-tenancy (see
+// PLAN-saas-multi-tenancy-foundation.md); migrates mechanically if/when
+// that lands.
+model CustomFieldDefinition {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  key       String // stable identifier — matches historical Quotation.pricingData JSON keys for seeded fields
+  label     String // display label, shown on both entry forms and the printed document
+  type      CustomFieldType
+  options   String[] // only meaningful when type = SELECT; a SELECT is never saved with zero options
+  sortOrder Int             @default(0)
+  isActive  Boolean         @default(true) // hide from new entries without deleting — deleting the row itself is also supported (see DELETE /api/user/custom-fields/[id]) and never touches historical Quotation.pricingData
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@index([userId])
 }
 
 // A saved buyer, scoped to the User (business owner) using this app — reusable

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { Plus, Trash2, Save } from "lucide-react";
 import { MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
+import { slugifyHardwareKey, type HardwareRateMap } from "@/utils/hardwareRates";
 
 type LaborMode = "flat" | "percentOfMaterial" | "perSqft";
 
@@ -14,7 +15,7 @@ interface RateCardData {
     profileRatePerFt: number;
     profileRates: Record<string, number>;
     glassRates: Record<string, number>;
-    hardwareRates: Record<string, number>;
+    hardwareRates: HardwareRateMap;
     laborMode: LaborMode;
     laborDefault: number;
     laborPercent: number;
@@ -106,6 +107,105 @@ function NamedRateList({
                     placeholder={placeholder}
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAdd())}
+                    className="flex-1"
+                />
+                <Button type="button" size="sm" variant="outline" onClick={handleAdd}>
+                    <Plus className="w-4 h-4 mr-1" /> Add
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+/** Same UX as NamedRateList, but for a map keyed by a STABLE key with an
+ * editable label — renaming an entry's label never breaks whatever code
+ * already looked its rate up by key (see src/utils/hardwareRates.ts). */
+function NamedKeyedRateList({
+    title,
+    hint,
+    placeholder,
+    rates,
+    onChange,
+}: {
+    title: string;
+    hint: string;
+    placeholder: string;
+    rates: HardwareRateMap;
+    onChange: (next: HardwareRateMap) => void;
+}) {
+    const [newLabel, setNewLabel] = useState("");
+    const entries = Object.entries(rates);
+
+    const handleAdd = () => {
+        const label = newLabel.trim();
+        if (!label) return;
+        const baseKey = slugifyHardwareKey(label) || "hardware";
+        let key = baseKey;
+        let suffix = 2;
+        while (key in rates) {
+            key = `${baseKey}_${suffix}`;
+            suffix++;
+        }
+        onChange({ ...rates, [key]: { label, rate: 0 } });
+        setNewLabel("");
+    };
+
+    const handleRemove = (key: string) => {
+        const next = { ...rates };
+        delete next[key];
+        onChange(next);
+    };
+
+    const handleLabelChange = (key: string, label: string) => {
+        onChange({ ...rates, [key]: { ...rates[key], label } });
+    };
+
+    const handleRateChange = (key: string, value: string) => {
+        onChange({ ...rates, [key]: { ...rates[key], rate: Number(value) || 0 } });
+    };
+
+    return (
+        <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-3">
+            <div>
+                <h3 className="font-semibold text-slate-800">{title}</h3>
+                <p className="text-xs text-slate-500">{hint}</p>
+            </div>
+
+            {entries.length > 0 && (
+                <div className="space-y-2">
+                    {entries.map(([key, entry]) => (
+                        <div key={key} className="flex items-center gap-2">
+                            <Input
+                                value={entry.label}
+                                onChange={(e) => handleLabelChange(key, e.target.value)}
+                                className="flex-1"
+                            />
+                            <Input
+                                type="number"
+                                step="0.01"
+                                value={entry.rate}
+                                onChange={(e) => handleRateChange(key, e.target.value)}
+                                className="w-32"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => handleRemove(key)}
+                                className="text-slate-400 hover:text-red-500"
+                                title="Remove"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                <Input
+                    placeholder={placeholder}
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAdd())}
                     className="flex-1"
                 />
@@ -272,9 +372,9 @@ export default function RateCardForm({ initial }: RateCardFormProps) {
                 onChange={(glassRates) => setData({ ...data, glassRates })}
             />
 
-            <NamedRateList
+            <NamedKeyedRateList
                 title="Hardware / Accessory Rates"
-                hint="Unit price per accessory (e.g. Track Cap, Interlock Clip, C-Channel, handles, locks)."
+                hint="Unit price per accessory (e.g. Track Cap, Interlock Clip, C-Channel, handles, locks, Pleated Mosquito Net). Renaming an entry here never breaks a quotation that already used it."
                 placeholder="e.g. Track Cap"
                 rates={data.hardwareRates}
                 onChange={(hardwareRates) => setData({ ...data, hardwareRates })}

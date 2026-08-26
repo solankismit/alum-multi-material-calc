@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import RateCardForm from "./RateCardForm";
 import { PageContainer } from "@/components/layout/PageContainer";
+import type { HardwareRateMap } from "@/utils/hardwareRates";
 
 export default async function RateCardPage() {
     const session = await verifySession();
@@ -16,7 +17,7 @@ export default async function RateCardPage() {
         profileRatePerFt: rateCard?.profileRatePerFt ?? 0,
         profileRates: (rateCard?.profileRates as Record<string, number>) ?? {},
         glassRates: (rateCard?.glassRates as Record<string, number>) ?? {},
-        hardwareRates: (rateCard?.hardwareRates as Record<string, number>) ?? {},
+        hardwareRates: (rateCard?.hardwareRates as unknown as HardwareRateMap) ?? {},
         laborMode: (rateCard?.laborMode as "flat" | "percentOfMaterial" | "perSqft") ?? "flat",
         laborDefault: rateCard?.laborDefault ?? 0,
         laborPercent: rateCard?.laborPercent ?? 0,

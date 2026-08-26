@@ -12,6 +12,8 @@ import { feetToMm, mmToFeet } from "@/utils/formatters";
 import type { RateMap } from "./QuotationBuilder";
 import type { ItemPosition, ItemSpecDetails } from "@/utils/quotationPricing";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import DynamicFieldsEditor from "@/components/DynamicFieldsEditor";
+import type { CustomFieldDefinitionData } from "@/utils/customFields";
 
 export interface ManualSection {
     id: string;
@@ -50,6 +52,9 @@ interface ManualSectionFormProps {
     onAddHardware: () => void;
     onUpdateHardware: (itemId: string, updates: Partial<ManualHardwareItem>) => void;
     onRemoveHardware: (itemId: string) => void;
+    pleatedMosquitoActive: boolean;
+    onTogglePleatedMosquito: (checked: boolean) => void;
+    customFieldDefinitions: CustomFieldDefinitionData[];
 }
 
 /**
@@ -72,6 +77,9 @@ export default function ManualSectionForm({
     onAddHardware,
     onUpdateHardware,
     onRemoveHardware,
+    pleatedMosquitoActive,
+    onTogglePleatedMosquito,
+    customFieldDefinitions,
 }: ManualSectionFormProps) {
     const displayValue = (mm: number | null) => (mm === null ? "" : unitMode === "ft" ? mmToFeet(mm) : mm);
 
@@ -88,7 +96,7 @@ export default function ManualSectionForm({
         onUpdate({ [field]: unitMode === "ft" ? feetToMm(num) : num });
     };
 
-    const updateDetails = (updates: Partial<ItemSpecDetails>) => {
+    const updateDetails = (updates: ItemSpecDetails) => {
         onUpdate({ details: { ...section.details, ...updates } });
     };
 
@@ -314,6 +322,14 @@ export default function ManualSectionForm({
                 <button type="button" onClick={onAddHardware} className="text-xs text-primary hover:underline flex items-center gap-1">
                     <Plus className="w-3 h-3" /> Add hardware
                 </button>
+                <label className="flex items-center gap-1.5 text-xs text-text-muted">
+                    <input
+                        type="checkbox"
+                        checked={pleatedMosquitoActive}
+                        onChange={(e) => onTogglePleatedMosquito(e.target.checked)}
+                    />
+                    Add pleated mosquito net
+                </label>
             </div>
 
             {/* Details — color/glass/mesh/handle/locking/hinge/notes shown on the
@@ -329,40 +345,12 @@ export default function ManualSectionForm({
                     Details (color, mesh, handle, locking, notes)
                 </button>
                 {detailsOpen && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                        <div>
-                            <Label className="text-[11px] mb-0.5 leading-tight">Profile Color</Label>
-                            <Input className="h-8 text-xs" value={section.details?.profileColor ?? ""} onChange={(e) => updateDetails({ profileColor: e.target.value })} placeholder="e.g. Gray" />
-                        </div>
-                        <div>
-                            <Label className="text-[11px] mb-0.5 leading-tight">Glass Spec</Label>
-                            <Input className="h-8 text-xs" value={section.details?.glassSpec ?? ""} onChange={(e) => updateDetails({ glassSpec: e.target.value })} placeholder="e.g. 6mm Clear Toughened" />
-                        </div>
-                        <div>
-                            <Label className="text-[11px] mb-0.5 leading-tight">Bug Mesh</Label>
-                            <Input className="h-8 text-xs" value={section.details?.meshGrade ?? ""} onChange={(e) => updateDetails({ meshGrade: e.target.value })} placeholder="e.g. Fibre Mesh" />
-                        </div>
-                        <div>
-                            <Label className="text-[11px] mb-0.5 leading-tight">Mesh Handle</Label>
-                            <Input className="h-8 text-xs" value={section.details?.meshHandle ?? ""} onChange={(e) => updateDetails({ meshHandle: e.target.value })} placeholder="e.g. Touch Lock Nib" />
-                        </div>
-                        <div>
-                            <Label className="text-[11px] mb-0.5 leading-tight">Locking</Label>
-                            <Input className="h-8 text-xs" value={section.details?.locking ?? ""} onChange={(e) => updateDetails({ locking: e.target.value })} placeholder="e.g. Multi-point" />
-                        </div>
-                        <div>
-                            <Label className="text-[11px] mb-0.5 leading-tight">Handle Color</Label>
-                            <Input className="h-8 text-xs" value={section.details?.handleColor ?? ""} onChange={(e) => updateDetails({ handleColor: e.target.value })} placeholder="e.g. Black" />
-                        </div>
-                        <div>
-                            <Label className="text-[11px] mb-0.5 leading-tight">Hinge</Label>
-                            <Input className="h-8 text-xs" value={section.details?.hinge ?? ""} onChange={(e) => updateDetails({ hinge: e.target.value })} placeholder="e.g. Butt Hinge" />
-                        </div>
-                        <div className="col-span-2 md:col-span-3">
-                            <Label className="text-[11px] mb-0.5 leading-tight">Notes</Label>
-                            <Input className="h-8 text-xs" value={section.details?.notes ?? ""} onChange={(e) => updateDetails({ notes: e.target.value })} placeholder="Free text, shown on the printed quote" />
-                        </div>
-                    </div>
+                    <DynamicFieldsEditor
+                        definitions={customFieldDefinitions}
+                        values={section.details}
+                        onChange={updateDetails}
+                        className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2"
+                    />
                 )}
             </div>
         </div>

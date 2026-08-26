@@ -15,6 +15,11 @@ import { isValidGstFormat } from "@/utils/validation";
 import { resolveMaterialCategory, MATERIAL_CATEGORY_LABELS } from "@/utils/materialCategory";
 import { calculateLaborCost, type LaborMode } from "@/utils/laborCost";
 import {
+    findHardwareRateByLabel,
+    PLEATED_MOSQUITO_NET_LABEL,
+    type HardwareRateMap,
+} from "@/utils/hardwareRates";
+import {
     computeTotals,
     sumLaborItems,
     mergeItemDetails,
@@ -32,6 +37,8 @@ import type { MaterialCategory, WindowInput } from "@/types";
 import WindowSchematic from "@/components/WindowSchematic";
 import { useToast } from "@/components/ui/Toast";
 import ManualSectionForm, { type ManualSection, type ManualHardwareItem } from "./ManualSectionForm";
+import DynamicFieldsEditor from "@/components/DynamicFieldsEditor";
+import type { CustomFieldDefinitionData } from "@/utils/customFields";
 
 export interface RateMap {
     [key: string]: number;
@@ -41,7 +48,7 @@ export interface RateCardData {
     profileRatePerFt: number;
     profileRates: RateMap;
     glassRates: RateMap;
-    hardwareRates: RateMap;
+    hardwareRates: HardwareRateMap;
     laborMode: LaborMode;
     laborDefault: number;
     laborPercent: number;
@@ -169,8 +176,8 @@ function buildInitialSectionTypeRates(
                 profileRates: {},
                 glassType: savedGlass?.name || firstGlassType || "",
                 glassRate: savedGlass?.rate ?? (firstGlassType && card ? card.glassRates[firstGlassType] : 0),
-                meshRate: savedMesh?.rate ?? (card?.hardwareRates["Mosquito Mesh"] ?? card?.hardwareRates["C-Channel"] ?? 0),
-                trackCapRate: savedTrackCap?.rate ?? (card?.hardwareRates["Track Cap"] ?? 0),
+                meshRate: savedMesh?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, "Mosquito Mesh") ?? findHardwareRateByLabel(card?.hardwareRates, "C-Channel") ?? 0),
+                trackCapRate: savedTrackCap?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, "Track Cap") ?? 0),
             };
         }
         typeRates[key].usedBySectionNames.push(section.sectionName);
@@ -264,9 +271,13 @@ export interface QuotationBuilderProps {
     initialRateCard: RateCardData | null;
     initialWorksheet: { input: WindowInput; result: { sectionResults: SectionResult[] } | null } | null;
     initialQuotation?: InitialQuotation | null;
+    /** Fetched once server-side and passed down — mergeItemDetails() runs
+     * client-side in this component, so the definitions need to reach the
+     * client bundle, not stop at the server boundary. */
+    customFieldDefinitions: CustomFieldDefinitionData[];
 }
 
-export default function QuotationBuilder({ worksheetId, initialRateCard, initialWorksheet, initialQuotation }: QuotationBuilderProps) {
+export default function QuotationBuilder({ worksheetId, initialRateCard, initialWorksheet, initialQuotation, customFieldDefinitions }: QuotationBuilderProps) {
     const router = useRouter();
     const { toast } = useToast();
 
@@ -301,6 +312,13 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
     );
     const [itemDetailOverrides, setItemDetailOverrides] = useState<Record<string, ItemSpecDetails>>({});
     const [expandedDetailItems, setExpandedDetailItems] = useState<Record<string, boolean>>({});
+    // Passed to mergeItemDetails() so a since-disabled field's saved value
+    // is still preserved (not just the currently-active fields) — see the
+    // write-path preservation fix in mergeItemDetails' own doc comment.
+    const activeFieldKeys = useMemo(
+        () => customFieldDefinitions.filter((d) => d.isActive).map((d) => d.key),
+        [customFieldDefinitions]
+    );
 
     // Manual (no-worksheet) sections — each has its own dimensions, track
     // type/configuration, glass rate and a flat frame rate. Reconstructed
@@ -544,7 +562,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 subtotal,
                 materialWastagePercent: section.summary?.wastagePercent,
                 position: itemPositions[section.sectionId],
-                details: mergeItemDetails(sectionTypeDetails[typeKey], itemDetailOverrides[section.sectionId]),
+                details: mergeItemDetails(sectionTypeDetails[typeKey], itemDetailOverrides[section.sectionId], activeFieldKeys),
             };
         });
 
@@ -711,8 +729,9 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 if (item.id !== itemId) return item;
                 const next = { ...item, ...updates };
                 // Auto-fill the rate from the rate card the first time a known hardware name is typed.
-                if (updates.name !== undefined && next.rate === 0 && rateCard?.hardwareRates[updates.name] !== undefined) {
-                    next.rate = rateCard.hardwareRates[updates.name];
+                if (updates.name !== undefined && next.rate === 0) {
+                    const matchedRate = findHardwareRateByLabel(rateCard?.hardwareRates, updates.name);
+                    if (matchedRate !== undefined) next.rate = matchedRate;
                 }
                 return next;
             }),
@@ -726,6 +745,30 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         });
     };
 
+    /** Whether "Add pleated mosquito net" is checked for a section — modeled
+     * as a plain extra-hardware line (same mechanism as any other accessory),
+     * not a new concept, per the corrected F6 design. */
+    const isPleatedMosquitoActive = (sectionId: string) =>
+        (extraHardware[sectionId] || []).some((item) => item.name === PLEATED_MOSQUITO_NET_LABEL);
+
+    const togglePleatedMosquito = (sectionId: string, checked: boolean) => {
+        if (checked) {
+            const rate = findHardwareRateByLabel(rateCard?.hardwareRates, PLEATED_MOSQUITO_NET_LABEL) ?? 0;
+            setExtraHardware({
+                ...extraHardware,
+                [sectionId]: [
+                    ...(extraHardware[sectionId] || []),
+                    { id: crypto.randomUUID(), name: PLEATED_MOSQUITO_NET_LABEL, quantity: 1, unit: "nos", rate },
+                ],
+            });
+        } else {
+            setExtraHardware({
+                ...extraHardware,
+                [sectionId]: (extraHardware[sectionId] || []).filter((item) => item.name !== PLEATED_MOSQUITO_NET_LABEL),
+            });
+        }
+    };
+
     const updateItemPosition = (sectionId: string, label: string) => {
         setItemPositions({ ...itemPositions, [sectionId]: { ...itemPositions[sectionId], label } });
     };
@@ -734,14 +777,14 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         setExpandedDetailItems({ ...expandedDetailItems, [sectionId]: !expandedDetailItems[sectionId] });
     };
 
-    const updateItemDetailOverride = (sectionId: string, updates: Partial<ItemSpecDetails>) => {
+    const updateItemDetailOverride = (sectionId: string, updates: ItemSpecDetails) => {
         setItemDetailOverrides({
             ...itemDetailOverrides,
             [sectionId]: { ...itemDetailOverrides[sectionId], ...updates },
         });
     };
 
-    const updateSectionTypeDetails = (typeKey: string, updates: Partial<ItemSpecDetails>) => {
+    const updateSectionTypeDetails = (typeKey: string, updates: ItemSpecDetails) => {
         setSectionTypeDetails({
             ...sectionTypeDetails,
             [typeKey]: { ...sectionTypeDetails[typeKey], ...updates },
@@ -829,8 +872,8 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
     return (
         <div className="min-h-screen bg-surface-muted p-4 sm:p-6 lg:p-8 font-sans">
             <datalist id="hardware-rate-suggestions">
-                {Object.keys(rateCard?.hardwareRates || {}).map((name) => (
-                    <option key={name} value={name} />
+                {Object.values(rateCard?.hardwareRates || {}).map((entry) => (
+                    <option key={entry.label} value={entry.label} />
                 ))}
             </datalist>
             <div className="w-full space-y-6">
@@ -1058,35 +1101,13 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                                 Leave every field blank to keep printing exactly as
                                                 it did before this feature existed. */}
                                             <div className="pt-2 border-t border-border">
-                                                <Label className="text-[11px] mb-1 leading-tight text-text-muted">Details for this system (color, mesh, handle, locking, notes)</Label>
-                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                                    {([
-                                                        ["profileColor", "Profile Color"],
-                                                        ["glassSpec", "Glass Spec"],
-                                                        ["meshGrade", "Bug Mesh"],
-                                                        ["meshHandle", "Mesh Handle"],
-                                                        ["locking", "Locking"],
-                                                        ["handleColor", "Handle Color"],
-                                                        ["hinge", "Hinge"],
-                                                    ] as const).map(([field, fieldLabel]) => (
-                                                        <div key={field}>
-                                                            <Label className="text-[11px] mb-0.5 leading-tight">{fieldLabel}</Label>
-                                                            <Input
-                                                                className="h-8 text-xs"
-                                                                value={sectionTypeDetails[typeRate.sectionTypeKey]?.[field] ?? ""}
-                                                                onChange={(e) => updateSectionTypeDetails(typeRate.sectionTypeKey, { [field]: e.target.value })}
-                                                            />
-                                                        </div>
-                                                    ))}
-                                                    <div className="col-span-2 sm:col-span-4">
-                                                        <Label className="text-[11px] mb-0.5 leading-tight">Notes</Label>
-                                                        <Input
-                                                            className="h-8 text-xs"
-                                                            value={sectionTypeDetails[typeRate.sectionTypeKey]?.notes ?? ""}
-                                                            onChange={(e) => updateSectionTypeDetails(typeRate.sectionTypeKey, { notes: e.target.value })}
-                                                        />
-                                                    </div>
-                                                </div>
+                                                <Label className="text-[11px] mb-1 leading-tight text-text-muted">Details for this system</Label>
+                                                <DynamicFieldsEditor
+                                                    definitions={customFieldDefinitions}
+                                                    values={sectionTypeDetails[typeRate.sectionTypeKey]}
+                                                    onChange={(updates) => updateSectionTypeDetails(typeRate.sectionTypeKey, updates)}
+                                                    className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+                                                />
                                             </div>
                                         </div>
                                     ))}
@@ -1188,6 +1209,14 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                                             >
                                                                 <Plus className="w-3 h-3" /> Add hardware
                                                             </button>
+                                                            <label className="flex items-center gap-1.5 text-xs text-text-muted">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isPleatedMosquitoActive(section.sectionId)}
+                                                                    onChange={(e) => togglePleatedMosquito(section.sectionId, e.target.checked)}
+                                                                />
+                                                                Add pleated mosquito net
+                                                            </label>
                                                         </div>
 
                                                         {/* Per-item override — only needed when this one window
@@ -1201,26 +1230,13 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                                                 {expandedDetailItems[section.sectionId] ? "Hide" : "Override"} details for this item
                                                             </button>
                                                             {expandedDetailItems[section.sectionId] && (
-                                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 mt-1">
-                                                                    {([
-                                                                        ["profileColor", "Profile Color"],
-                                                                        ["glassSpec", "Glass Spec"],
-                                                                        ["meshGrade", "Bug Mesh"],
-                                                                        ["meshHandle", "Mesh Handle"],
-                                                                        ["locking", "Locking"],
-                                                                        ["handleColor", "Handle Color"],
-                                                                        ["hinge", "Hinge"],
-                                                                        ["notes", "Notes"],
-                                                                    ] as const).map(([field, fieldLabel]) => (
-                                                                        <Input
-                                                                            key={field}
-                                                                            className="h-7 text-xs"
-                                                                            placeholder={fieldLabel}
-                                                                            value={itemDetailOverrides[section.sectionId]?.[field] ?? ""}
-                                                                            onChange={(e) => updateItemDetailOverride(section.sectionId, { [field]: e.target.value })}
-                                                                        />
-                                                                    ))}
-                                                                </div>
+                                                                <DynamicFieldsEditor
+                                                                    definitions={customFieldDefinitions}
+                                                                    values={itemDetailOverrides[section.sectionId]}
+                                                                    onChange={(updates) => updateItemDetailOverride(section.sectionId, updates)}
+                                                                    className="grid grid-cols-2 sm:grid-cols-4 gap-1 mt-1"
+                                                                    inputClassName="h-7 text-xs"
+                                                                />
                                                             )}
                                                         </div>
                                                     </td>
@@ -1268,6 +1284,9 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                         onAddHardware={() => addHardwareItem(section.id)}
                                         onUpdateHardware={(itemId, updates) => updateHardwareItem(section.id, itemId, updates)}
                                         onRemoveHardware={(itemId) => removeHardwareItem(section.id, itemId)}
+                                        pleatedMosquitoActive={isPleatedMosquitoActive(section.id)}
+                                        onTogglePleatedMosquito={(checked) => togglePleatedMosquito(section.id, checked)}
+                                        customFieldDefinitions={customFieldDefinitions}
                                     />
                                 ))}
                             </div>

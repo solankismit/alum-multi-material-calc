@@ -63,7 +63,7 @@ export default async function CreateQuotationPage({
             profileRatePerFt: rateCardRow.profileRatePerFt,
             profileRates: (rateCardRow.profileRates as Record<string, number>) ?? {},
             glassRates: (rateCardRow.glassRates as Record<string, number>) ?? {},
-            hardwareRates: (rateCardRow.hardwareRates as Record<string, number>) ?? {},
+            hardwareRates: (rateCardRow.hardwareRates as unknown as RateCardData["hardwareRates"]) ?? {},
             laborMode: rateCardRow.laborMode as RateCardData["laborMode"],
             laborDefault: rateCardRow.laborDefault,
             laborPercent: rateCardRow.laborPercent,
@@ -84,12 +84,21 @@ export default async function CreateQuotationPage({
         initialWorksheet = owned.data;
     }
 
+    // Fetched once here, passed down as a prop — QuotationBuilder and
+    // ManualSectionForm both run client-side, so this is the one server
+    // round-trip for the user's item-spec field catalog per page load.
+    const customFieldDefinitionRows = await db.customFieldDefinition.findMany({
+        where: { userId: session.userId as string },
+        orderBy: { sortOrder: "asc" },
+    });
+
     return (
         <QuotationBuilder
             worksheetId={effectiveWorksheetId}
             initialRateCard={initialRateCard}
             initialWorksheet={initialWorksheet}
             initialQuotation={initialQuotation}
+            customFieldDefinitions={customFieldDefinitionRows}
         />
     );
 }

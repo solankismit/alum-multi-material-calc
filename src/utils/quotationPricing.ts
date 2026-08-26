@@ -24,40 +24,28 @@ export interface ItemPosition {
   floor?: string;
 }
 
-/** Per-item hardware/finish spec — the Telesia-style detail block. Every field is optional and
- * free text; an item with none of these set renders exactly as it did before this feature existed. */
-export interface ItemSpecDetails {
-  profileBrand?: string;
-  series?: string;
-  glassSpec?: string;
-  profileColor?: string;
-  meshGrade?: string;
-  meshHandle?: string;
-  locking?: string;
-  handleColor?: string;
-  hinge?: string;
-  notes?: string;
-}
-
-const ITEM_SPEC_DETAIL_KEYS: (keyof ItemSpecDetails)[] = [
-  "profileBrand",
-  "series",
-  "glassSpec",
-  "profileColor",
-  "meshGrade",
-  "meshHandle",
-  "locking",
-  "handleColor",
-  "hinge",
-  "notes",
-];
+/** Per-item hardware/finish spec — the Telesia-style detail block. Keyed by
+ * CustomFieldDefinition.key (user-configurable per account), not a fixed set
+ * of named fields — see src/utils/customFields.ts for the field-catalog
+ * model. Every value is optional/free text; an item with none set renders
+ * exactly as it did before this feature existed. */
+export type ItemSpecDetails = Record<string, string>;
 
 /** Merges a section-level default spec with a per-item override — override wins field-by-field,
- * a blank/unset override field falls back to the default. Returns undefined when nothing is set,
- * so old quotations (no defaults, no overrides) render identically to before this feature existed. */
-export function mergeItemDetails(defaults?: ItemSpecDetails, overrides?: ItemSpecDetails): ItemSpecDetails | undefined {
+ * a blank/unset override field falls back to the default. `activeKeys` is the user's currently-
+ * active field-definition keys, used so a brand-new field with no value anywhere still merges
+ * cleanly — but keys NOT in `activeKeys` (e.g. a field disabled after this data was saved) are
+ * still preserved as long as they're present in `defaults`/`overrides`, so disabling a field never
+ * silently deletes historical data. Returns undefined when nothing is set, so old quotations (no
+ * defaults, no overrides) render identically to before this feature existed. */
+export function mergeItemDetails(
+  defaults: ItemSpecDetails | undefined,
+  overrides: ItemSpecDetails | undefined,
+  activeKeys: string[] = []
+): ItemSpecDetails | undefined {
   const merged: ItemSpecDetails = {};
-  ITEM_SPEC_DETAIL_KEYS.forEach((key) => {
+  const allKeys = new Set<string>([...activeKeys, ...Object.keys(defaults ?? {}), ...Object.keys(overrides ?? {})]);
+  allKeys.forEach((key) => {
     const value = overrides?.[key]?.trim() || defaults?.[key]?.trim();
     if (value) merged[key] = value;
   });
@@ -142,18 +130,12 @@ const itemPositionSchema = z.object({
   floor: z.string().optional(),
 });
 
-const itemSpecDetailsSchema = z.object({
-  profileBrand: z.string().optional(),
-  series: z.string().optional(),
-  glassSpec: z.string().optional(),
-  profileColor: z.string().optional(),
-  meshGrade: z.string().optional(),
-  meshHandle: z.string().optional(),
-  locking: z.string().optional(),
-  handleColor: z.string().optional(),
-  hinge: z.string().optional(),
-  notes: z.string().optional(),
-});
+// Generic — keyed by whatever CustomFieldDefinition keys the owning user has
+// (active or since-disabled). Not validated against each field's configured
+// `type`/`options` here: the entry UI only ever presents valid choices for a
+// SELECT field, and a value that no longer matches a since-changed option
+// list must still round-trip as historical data, not be rejected on save.
+const itemSpecDetailsSchema = z.record(z.string(), z.string());
 
 const lineItemSchema = z.object({
   name: z.string(),
