@@ -189,7 +189,19 @@ function createFrameMaterial(
     ...heightPieces.map((p) => ({ length: p.length, count: p.count, type: `height-${p.length}` })),
   ];
 
-  const frameBreakdown = optimizeCombinedStockUsage(framePieceRequirements, stockMap?.['frameWidth'], kerfWidthMm);
+  // Widths and heights are optimized together here, so both of their stock
+  // selections must be available to the pass — using only 'frameWidth' would
+  // silently ignore whatever the user configured under 'frameHeight'.
+  const combinedFrameStockOptions = stockMap
+    ? Array.from(
+        new Map(
+          [...(stockMap['frameWidth'] || []), ...(stockMap['frameHeight'] || [])]
+            .map((o) => [o.length, o])
+        ).values()
+      )
+    : undefined;
+
+  const frameBreakdown = optimizeCombinedStockUsage(framePieceRequirements, combinedFrameStockOptions, kerfWidthMm);
   const frameTotal = widthPieces.reduce((sum, p) => sum + p.length * p.count, 0) + heightPieces.reduce((sum, p) => sum + p.length * p.count, 0);
 
   const frameWidthDesc = widthPieces.map((p) => `${p.count}×${mmToFeet(p.length)}ft`).join(" + ");

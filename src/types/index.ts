@@ -69,6 +69,12 @@ export interface StockBreakdown {
   allStockCounts?: {
     [stockName: string]: number;
   };
+  /** True when at least one required piece is longer than every available
+   * stock option — no single bar can hold it, so the fallback placed one
+   * piece per bar and the reported wastage is a floor, not a real optimum. */
+  exceedsStockLength?: boolean;
+  /** The longest required piece length (mm) that didn't fit any stock option. */
+  oversizedPieceLength?: number;
 }
 
 export type MaterialCategory =

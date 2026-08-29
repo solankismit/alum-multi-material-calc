@@ -14,6 +14,13 @@ export const STOCK_OPTIONS: StockOption[] = [
  */
 export const DEFAULT_KERF_WIDTH_MM = 3;
 
+/** Picks the option with the largest length — used by both fallbacks below,
+ * which need the true longest bar, not just stockOptions[0] (only correct
+ * when the caller happens to pass options pre-sorted descending). */
+function findLongestStock(stockOptions: StockOption[]): StockOption {
+  return stockOptions.reduce((longest, s) => (s.length > longest.length ? s : longest), stockOptions[0]);
+}
+
 export interface PieceRequirement {
   length: number;
   count: number;
@@ -89,18 +96,23 @@ export function optimizeStockUsage(
     }
   }
 
-  // Fallback: piece is larger than every stock option — one piece per stock bar
+  // Fallback: piece is larger than every stock option — one piece per stock bar.
+  // The piece still won't fit in a single bar; wastage is clamped to 0 rather
+  // than reporting a nonsensical negative number, and the caller is told the
+  // piece exceeds every stock length so it can be flagged for splicing/review.
   if (!bestOption && stockOptions.length > 0) {
-    const largestStock = stockOptions[0];
+    const largestStock = findLongestStock(stockOptions);
+    const perPieceWastage = Math.max(0, largestStock.length - requiredLength);
+    const exceedsStockLength = requiredLength > largestStock.length;
     const cuttingPlans: CuttingPlan[] = [];
     for (let i = 0; i < totalPieces; i++) {
       cuttingPlans.push({
         stockIndex: i + 1,
         pieces: [requiredLength],
-        wastage: largestStock.length - requiredLength,
+        wastage: perPieceWastage,
       });
     }
-    const totalWastage = totalPieces * (largestStock.length - requiredLength);
+    const totalWastage = totalPieces * perPieceWastage;
     bestOption = {
       stockLength: largestStock.length,
       stockName: largestStock.name,
@@ -111,6 +123,7 @@ export function optimizeStockUsage(
       cuttingPlans,
       requiredLength,
       totalPieces,
+      ...(exceedsStockLength ? { exceedsStockLength: true, oversizedPieceLength: requiredLength } : {}),
     };
   }
 
@@ -305,9 +318,15 @@ export function optimizeCombinedStockUsage(
   // Strategy B: mixed-stock greedy (best wastage % per iteration)
   tryAndKeepBest(runGreedyPack(pieceRequirements, currentStockOptions, kerfWidthMm));
 
-  // Fallback: piece(s) exceed every available stock — one piece per bar
+  // Fallback: piece(s) exceed every available stock — one piece per bar.
+  // Wastage per oversized piece is clamped to 0 (never negative), and any
+  // piece that exceeds the longest stock is flagged via exceedsStockLength /
+  // oversizedPieceLength so the caller can surface a real warning instead of
+  // a nonsensical negative wastage percentage.
+  let fallbackExceedsStockLength = false;
+  let fallbackOversizedPieceLength = 0;
   if (!bestSolution) {
-    const largestStock = currentStockOptions[0];
+    const largestStock = findLongestStock(currentStockOptions);
     const fallbackCuttingPlans: CuttingPlan[] = [];
     let stockIdx = 1;
     let totalStockLength = 0;
@@ -316,17 +335,22 @@ export function optimizeCombinedStockUsage(
     const pieceBreakdown: { [type: string]: number } = {};
 
     pieceRequirements.forEach((req) => {
+      const pieceWastage = Math.max(0, largestStock.length - req.length);
+      if (req.length > largestStock.length) {
+        fallbackExceedsStockLength = true;
+        fallbackOversizedPieceLength = Math.max(fallbackOversizedPieceLength, req.length);
+      }
       for (let i = 0; i < req.count; i++) {
         stockCounts[largestStock.name] =
           (stockCounts[largestStock.name] || 0) + 1;
         totalStockLength += largestStock.length;
-        totalWastage += largestStock.length - req.length;
+        totalWastage += pieceWastage;
         pieceBreakdown[req.type] = (pieceBreakdown[req.type] || 0) + 1;
         fallbackCuttingPlans.push({
           stockIndex: stockIdx++,
           pieces: [req.length],
           pieceTypes: [req.type],
-          wastage: largestStock.length - req.length,
+          wastage: pieceWastage,
         });
       }
     });
@@ -369,5 +393,8 @@ export function optimizeCombinedStockUsage(
     pieceBreakdown: bestSolution.pieceBreakdown,
     allStockCounts: bestSolution.stockCounts,
     totalPieces,
+    ...(fallbackExceedsStockLength
+      ? { exceedsStockLength: true, oversizedPieceLength: fallbackOversizedPieceLength }
+      : {}),
   };
 }

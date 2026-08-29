@@ -40,6 +40,14 @@ export default function MaterialCard({
         </span>
       </div>
 
+      {material.stockBreakdown.exceedsStockLength && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded px-2 py-1.5 mb-2">
+          A required piece ({mmToFeet(material.stockBreakdown.oversizedPieceLength ?? 0)}ft) is
+          longer than every available stock length — it won&apos;t fit any single bar. Splice
+          multiple bars or add a longer stock option to get an accurate cut plan.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 mb-2 text-xs">
         <div>
           <p className="text-text-muted mb-0.5">Required</p>
