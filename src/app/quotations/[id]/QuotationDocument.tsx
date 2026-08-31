@@ -275,7 +275,7 @@ export default function QuotationDocument({
                                     const allLines = [...section.profiles, ...section.glass, ...section.accessories];
                                     const includedLines = allLines.filter((line) => line.cost > 0 || line.quantity || line.area);
                                     const glassLine = section.glass[0];
-                                    const meshLine = section.accessories.find((a) => a.area);
+                                    const meshLine = section.accessories.find((a) => a.area && a.name.toLowerCase().includes("mesh"));
                                     return (
                                         <tr key={section.sectionId} className="align-top print:break-inside-avoid">
                                             <td className="p-2 print:p-1 w-44">

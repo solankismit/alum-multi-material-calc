@@ -12,7 +12,7 @@ export const STOCK_OPTIONS: StockOption[] = [
  * Standard aluminium profile saws waste ~2–3 mm per cut.
  * Used as the fallback whenever a caller doesn't pass an explicit kerf.
  */
-export const DEFAULT_KERF_WIDTH_MM = 3;
+export const DEFAULT_KERF_WIDTH_MM = 0;
 
 /** Picks the option with the largest length — used by both fallbacks below,
  * which need the true longest bar, not just stockOptions[0] (only correct

@@ -26,6 +26,11 @@ const sectionUpdateSchema = z.object({
         separateMosquitoNet: z.boolean().default(false),
         differentFrameMaterials: z.boolean().default(false),
         hasTrackRail: z.boolean().default(true),
+        lockCount: z.number().default(0),
+        bearingCount: z.number().default(0),
+        cornerCount: z.number().default(0),
+        connectorCount: z.number().default(0),
+        capCount: z.number().default(0),
     })),
 });
 

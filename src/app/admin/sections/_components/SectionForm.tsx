@@ -46,6 +46,11 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
             separateMosquitoNet: false,
             differentFrameMaterials: false,
             hasTrackRail: true,
+            lockCount: 0,
+            bearingCount: 0,
+            cornerCount: 0,
+            connectorCount: 0,
+            capCount: 0,
         }
     ]);
 
@@ -64,6 +69,11 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
             separateMosquitoNet: false,
             differentFrameMaterials: false,
             hasTrackRail: true,
+            lockCount: 0,
+            bearingCount: 0,
+            cornerCount: 0,
+            connectorCount: 0,
+            capCount: 0,
         }]);
         setExamples([...examples, {}]);
         setExamplesB([...examplesB, {}]);
@@ -319,6 +329,11 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                 separateMosquitoNet: Boolean(c.separateMosquitoNet),
                 differentFrameMaterials: Boolean(c.differentFrameMaterials),
                 hasTrackRail: Boolean(c.hasTrackRail ?? true),
+                lockCount: Number(c.lockCount || 0),
+                bearingCount: Number(c.bearingCount || 0),
+                cornerCount: Number(c.cornerCount || 0),
+                connectorCount: Number(c.connectorCount || 0),
+                capCount: Number(c.capCount || 0),
             })),
 
         };
@@ -615,6 +630,26 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                                 <div>
                                     <Label className="mb-1 text-xs">Glass Height Deduction</Label>
                                     <Input type="number" step="0.001" value={config.glassHeightDeduction} onChange={e => handleConfigChange(i, "glassHeightDeduction", Number(e.target.value))} />
+                                </div>
+                                <div>
+                                    <Label className="mb-1 text-xs">Lock Count (per window)</Label>
+                                    <Input type="number" value={config.lockCount || 0} onChange={e => handleConfigChange(i, "lockCount", Number(e.target.value))} />
+                                </div>
+                                <div>
+                                    <Label className="mb-1 text-xs">Bearing Count (per window)</Label>
+                                    <Input type="number" value={config.bearingCount || 0} onChange={e => handleConfigChange(i, "bearingCount", Number(e.target.value))} />
+                                </div>
+                                <div>
+                                    <Label className="mb-1 text-xs">Corner Count (per window)</Label>
+                                    <Input type="number" value={config.cornerCount || 0} onChange={e => handleConfigChange(i, "cornerCount", Number(e.target.value))} />
+                                </div>
+                                <div>
+                                    <Label className="mb-1 text-xs">PVC Connector Count (per window)</Label>
+                                    <Input type="number" value={config.connectorCount || 0} onChange={e => handleConfigChange(i, "connectorCount", Number(e.target.value))} />
+                                </div>
+                                <div>
+                                    <Label className="mb-1 text-xs">Male-Female Cap Count (per window)</Label>
+                                    <Input type="number" value={config.capCount || 0} onChange={e => handleConfigChange(i, "capCount", Number(e.target.value))} />
                                 </div>
                                 <div className="flex flex-col gap-2 pt-6">
                                     <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">

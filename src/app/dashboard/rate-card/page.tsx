@@ -16,8 +16,13 @@ export default async function RateCardPage() {
     const initial = {
         profileRatePerFt: rateCard?.profileRatePerFt ?? 0,
         profileRates: (rateCard?.profileRates as Record<string, number>) ?? {},
+        profileWeightPerFt: (rateCard?.profileWeightPerFt as Record<string, number>) ?? {},
         glassRates: (rateCard?.glassRates as Record<string, number>) ?? {},
         hardwareRates: (rateCard?.hardwareRates as unknown as HardwareRateMap) ?? {},
+        rubberRatePerSqft: rateCard?.rubberRatePerSqft ?? 0,
+        brushRatePerSqft: rateCard?.brushRatePerSqft ?? 0,
+        coatingRatePerKg: rateCard?.coatingRatePerKg ?? 0,
+        coatingWastagePercent: rateCard?.coatingWastagePercent ?? 4,
         laborMode: (rateCard?.laborMode as "flat" | "percentOfMaterial" | "perSqft") ?? "flat",
         laborDefault: rateCard?.laborDefault ?? 0,
         laborPercent: rateCard?.laborPercent ?? 0,

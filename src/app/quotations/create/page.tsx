@@ -62,8 +62,13 @@ export default async function CreateQuotationPage({
         ? {
             profileRatePerFt: rateCardRow.profileRatePerFt,
             profileRates: (rateCardRow.profileRates as Record<string, number>) ?? {},
+            profileWeightPerFt: (rateCardRow.profileWeightPerFt as Record<string, number>) ?? {},
             glassRates: (rateCardRow.glassRates as Record<string, number>) ?? {},
             hardwareRates: (rateCardRow.hardwareRates as unknown as RateCardData["hardwareRates"]) ?? {},
+            rubberRatePerSqft: rateCardRow.rubberRatePerSqft,
+            brushRatePerSqft: rateCardRow.brushRatePerSqft,
+            coatingRatePerKg: rateCardRow.coatingRatePerKg,
+            coatingWastagePercent: rateCardRow.coatingWastagePercent,
             laborMode: rateCardRow.laborMode as RateCardData["laborMode"],
             laborDefault: rateCardRow.laborDefault,
             laborPercent: rateCardRow.laborPercent,

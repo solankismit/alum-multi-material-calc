@@ -14,8 +14,13 @@ type LaborMode = "flat" | "percentOfMaterial" | "perSqft";
 interface RateCardData {
     profileRatePerFt: number;
     profileRates: Record<string, number>;
+    profileWeightPerFt: Record<string, number>;
     glassRates: Record<string, number>;
     hardwareRates: HardwareRateMap;
+    rubberRatePerSqft: number;
+    brushRatePerSqft: number;
+    coatingRatePerKg: number;
+    coatingWastagePercent: number;
     laborMode: LaborMode;
     laborDefault: number;
     laborPercent: number;
@@ -364,6 +369,56 @@ export default function RateCardForm({ initial }: RateCardFormProps) {
                 </div>
             </div>
 
+            <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-3">
+                <h3 className="font-semibold text-slate-800">Profile Weight (for Coating Cost)</h3>
+                <p className="text-xs text-slate-500">
+                    Weight per running ft, used with Coating Rate below to cost powder-coating by weight. Leave a category at 0 if it isn&apos;t coated.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {MATERIAL_CATEGORIES.map((category) => (
+                        <div key={category}>
+                            <Label className="mb-1 text-xs">{MATERIAL_CATEGORY_LABELS[category]} (kg/ft)</Label>
+                            <Input
+                                type="number"
+                                step="0.001"
+                                value={data.profileWeightPerFt[category] ?? ""}
+                                onChange={(e) => {
+                                    const next = { ...data.profileWeightPerFt };
+                                    if (e.target.value === "") {
+                                        delete next[category];
+                                    } else {
+                                        next[category] = Number(e.target.value) || 0;
+                                    }
+                                    setData({ ...data, profileWeightPerFt: next });
+                                }}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-3">
+                <h3 className="font-semibold text-slate-800">Coating, Rubber & Brush</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                        <Label className="mb-1 text-xs">Coating Rate (₹/kg)</Label>
+                        <Input type="number" step="0.01" value={data.coatingRatePerKg} onChange={(e) => setData({ ...data, coatingRatePerKg: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                        <Label className="mb-1 text-xs">Coating Wastage (%)</Label>
+                        <Input type="number" step="0.01" value={data.coatingWastagePercent} onChange={(e) => setData({ ...data, coatingWastagePercent: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                        <Label className="mb-1 text-xs">Rubber Rate (₹/sq.ft)</Label>
+                        <Input type="number" step="0.01" value={data.rubberRatePerSqft} onChange={(e) => setData({ ...data, rubberRatePerSqft: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                        <Label className="mb-1 text-xs">Brush Rate (₹/sq.ft)</Label>
+                        <Input type="number" step="0.01" value={data.brushRatePerSqft} onChange={(e) => setData({ ...data, brushRatePerSqft: Number(e.target.value) || 0 })} />
+                    </div>
+                </div>
+            </div>
+
             <NamedRateList
                 title="Glass Rates"
                 hint="Add one entry per glass type/thickness you quote (₹ per sq.ft)."
@@ -374,8 +429,8 @@ export default function RateCardForm({ initial }: RateCardFormProps) {
 
             <NamedKeyedRateList
                 title="Hardware / Accessory Rates"
-                hint="Unit price per accessory (e.g. Track Cap, Interlock Clip, C-Channel, handles, locks, Pleated Mosquito Net). Renaming an entry here never breaks a quotation that already used it."
-                placeholder="e.g. Track Cap"
+                hint="Unit price per accessory (e.g. Track Cap, Lock, Bearing, Corner, PVC Connector, Male-Female Cap, handles, Pleated Mosquito Net). Use the exact labels Lock/Bearing/Corner/PVC Connector/Male-Female Cap so the auto-computed hardware counts pick up these rates. Renaming an entry here never breaks a quotation that already used it."
+                placeholder="e.g. Lock"
                 rates={data.hardwareRates}
                 onChange={(hardwareRates) => setData({ ...data, hardwareRates })}
             />

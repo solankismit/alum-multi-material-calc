@@ -118,6 +118,11 @@ export interface SectionResult {
   accessories: {
     mosquitoCChannel: number;
     trackCap: number;
+    lock: number;
+    bearing: number;
+    corner: number;
+    connector: number;
+    cap: number;
   };
   glassInfo: DimensionGlassInfo[];
   summary: {

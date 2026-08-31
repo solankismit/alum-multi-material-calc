@@ -6,8 +6,13 @@ import { z } from "zod";
 const rateCardSchema = z.object({
     profileRatePerFt: z.number().min(0),
     profileRates: z.record(z.string(), z.number().min(0)).default({}),
+    profileWeightPerFt: z.record(z.string(), z.number().min(0)).default({}),
     glassRates: z.record(z.string(), z.number().min(0)),
     hardwareRates: z.record(z.string(), z.object({ label: z.string().min(1), rate: z.number().min(0) })),
+    rubberRatePerSqft: z.number().min(0).default(0),
+    brushRatePerSqft: z.number().min(0).default(0),
+    coatingRatePerKg: z.number().min(0).default(0),
+    coatingWastagePercent: z.number().min(0).default(4),
     laborMode: z.enum(["flat", "percentOfMaterial", "perSqft"]).default("flat"),
     laborDefault: z.number().min(0),
     laborPercent: z.number().min(0).default(0),

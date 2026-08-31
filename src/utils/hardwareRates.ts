@@ -34,3 +34,14 @@ export function findHardwareRateByLabel(map: HardwareRateMap | undefined, label:
  * as a first-class, checkbox-driven line item rather than free text. */
 export const PLEATED_MOSQUITO_NET_KEY = "pleated_mosquito_net";
 export const PLEATED_MOSQUITO_NET_LABEL = "Pleated Mosquito Net";
+
+/** Conventional labels for the auto-quantified hardware items (lock, bearing,
+ * corner, PVC connector, male-female cap) — quantities come from
+ * SectionConfiguration.*Count, rates come from a RateCard.hardwareRates entry
+ * with this exact label, looked up via findHardwareRateByLabel() the same way
+ * "Mosquito Mesh"/"Track Cap" rates are looked up today. */
+export const LOCK_LABEL = "Lock";
+export const BEARING_LABEL = "Bearing";
+export const CORNER_LABEL = "Corner";
+export const PVC_CONNECTOR_LABEL = "PVC Connector";
+export const MALE_FEMALE_CAP_LABEL = "Male-Female Cap";

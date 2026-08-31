@@ -17,6 +17,11 @@ import { calculateLaborCost, type LaborMode } from "@/utils/laborCost";
 import {
     findHardwareRateByLabel,
     PLEATED_MOSQUITO_NET_LABEL,
+    LOCK_LABEL,
+    BEARING_LABEL,
+    CORNER_LABEL,
+    PVC_CONNECTOR_LABEL,
+    MALE_FEMALE_CAP_LABEL,
     type HardwareRateMap,
 } from "@/utils/hardwareRates";
 import {
@@ -47,8 +52,13 @@ export interface RateMap {
 export interface RateCardData {
     profileRatePerFt: number;
     profileRates: RateMap;
+    profileWeightPerFt: RateMap;
     glassRates: RateMap;
     hardwareRates: HardwareRateMap;
+    rubberRatePerSqft: number;
+    brushRatePerSqft: number;
+    coatingRatePerKg: number;
+    coatingWastagePercent: number;
     laborMode: LaborMode;
     laborDefault: number;
     laborPercent: number;
@@ -85,7 +95,7 @@ interface SectionResult {
     sectionTypeName?: string;
     materials: Array<{ category?: MaterialCategory; component: string; stockBreakdown: { stockName: string; stockLength: number; stocksNeeded: number } }>;
     glassInfo: Array<{ glassSize: { totalArea: number; width?: number; height?: number } }>;
-    accessories: { mosquitoCChannel: number; trackCap: number };
+    accessories: { mosquitoCChannel: number; trackCap: number; lock: number; bearing: number; corner: number; connector: number; cap: number };
     summary?: { wastagePercent?: number; totalMosquitoArea?: number };
 }
 
@@ -99,10 +109,16 @@ interface SectionTypeRates {
     sectionTypeName: string;
     usedBySectionNames: string[];
     profileRates: RateMap;
+    profileWeightRates: RateMap;
     glassType: string;
     glassRate: number;
     meshRate: number;
     trackCapRate: number;
+    lockRate: number;
+    bearingRate: number;
+    cornerRate: number;
+    connectorRate: number;
+    capRate: number;
 }
 
 type DiscountType = "percent" | "flat";
@@ -166,18 +182,29 @@ function buildInitialSectionTypeRates(
         if (!typeRates[key]) {
             const saved = findSaved(typeName);
             const savedGlass = saved?.glass?.[0];
-            const savedMesh = saved?.accessories?.find((a) => a.area !== undefined);
+            const savedMesh = saved?.accessories?.find((a) => a.area !== undefined && a.name.toLowerCase().includes("mesh"));
             const savedTrackCap = saved?.accessories?.find((a) => a.name === "Track Cap");
+            const savedLock = saved?.accessories?.find((a) => a.name === LOCK_LABEL);
+            const savedBearing = saved?.accessories?.find((a) => a.name === BEARING_LABEL);
+            const savedCorner = saved?.accessories?.find((a) => a.name === CORNER_LABEL);
+            const savedConnector = saved?.accessories?.find((a) => a.name === PVC_CONNECTOR_LABEL);
+            const savedCap = saved?.accessories?.find((a) => a.name === MALE_FEMALE_CAP_LABEL);
 
             typeRates[key] = {
                 sectionTypeKey: key,
                 sectionTypeName: typeName,
                 usedBySectionNames: [],
                 profileRates: {},
+                profileWeightRates: {},
                 glassType: savedGlass?.name || firstGlassType || "",
                 glassRate: savedGlass?.rate ?? (firstGlassType && card ? card.glassRates[firstGlassType] : 0),
                 meshRate: savedMesh?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, "Mosquito Mesh") ?? findHardwareRateByLabel(card?.hardwareRates, "C-Channel") ?? 0),
                 trackCapRate: savedTrackCap?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, "Track Cap") ?? 0),
+                lockRate: savedLock?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, LOCK_LABEL) ?? 0),
+                bearingRate: savedBearing?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, BEARING_LABEL) ?? 0),
+                cornerRate: savedCorner?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, CORNER_LABEL) ?? 0),
+                connectorRate: savedConnector?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, PVC_CONNECTOR_LABEL) ?? 0),
+                capRate: savedCap?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, MALE_FEMALE_CAP_LABEL) ?? 0),
             };
         }
         typeRates[key].usedBySectionNames.push(section.sectionName);
@@ -189,6 +216,9 @@ function buildInitialSectionTypeRates(
                 const label = MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category;
                 const savedLine = saved?.profiles?.find((p) => p.name === label);
                 typeRates[key].profileRates[category] = savedLine?.rate ?? (card?.profileRates?.[category] ?? card?.profileRatePerFt ?? 0);
+            }
+            if (typeRates[key].profileWeightRates[category] === undefined) {
+                typeRates[key].profileWeightRates[category] = card?.profileWeightPerFt?.[category] ?? 0;
             }
         });
     });
@@ -376,6 +406,10 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 { name: "Hardware Fitting", amount: 0 },
             ]
     );
+    const [coatingRatePerKg, setCoatingRatePerKg] = useState<number>(
+        seedPricing?.sections?.flatMap((s) => s.profiles).find((p) => p.name === "Coating")?.rate ?? initialRateCard?.coatingRatePerKg ?? 0
+    );
+    const [coatingWastagePercent, setCoatingWastagePercent] = useState<number>(initialRateCard?.coatingWastagePercent ?? 4);
     const [overheadCost, setOverheadCost] = useState<number>(seedPricing?.overhead ?? initialRateCard?.overheadDefault ?? 0);
     const [profitMargin, setProfitMargin] = useState<number>(seedPricing?.profitMargin ?? initialRateCard?.profitMarginDefault ?? 0);
     const [taxRate, setTaxRate] = useState<number>(seedPricing?.taxRate ?? initialRateCard?.taxRateDefault ?? 0);
@@ -502,8 +536,25 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 };
             });
 
+            const profileWeightKg = Object.entries(sectionProfileQty).reduce(
+                (sum, [category, qtyFt]) => sum + qtyFt * (typeRates?.profileWeightRates[category] || 0),
+                0
+            );
+            const coatedWeightKg = profileWeightKg * (1 + coatingWastagePercent / 100);
+            const coatingRate = coatingRatePerKg || 0;
+            if (coatedWeightKg > 0) {
+                profiles.push({
+                    name: "Coating",
+                    quantity: coatedWeightKg,
+                    unit: "kg",
+                    rate: coatingRate,
+                    cost: coatedWeightKg * coatingRate,
+                });
+            }
+
             const sectionGlassAreaSqFt = section.glassInfo.reduce((sum, g) => sum + g.glassSize.totalArea, 0) / AREA_SQMM_PER_SQFT;
             const firstGlassSize = section.glassInfo[0]?.glassSize;
+            const rubberRate = rateCard?.rubberRatePerSqft || 0;
             const glass: LineItem[] = sectionGlassAreaSqFt > 0
                 ? [{
                     name: typeRates?.glassType || "Glass",
@@ -513,11 +564,18 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                     cost: sectionGlassAreaSqFt * (typeRates?.glassRate || 0),
                     widthMm: firstGlassSize?.width,
                     heightMm: firstGlassSize?.height,
+                }, {
+                    name: "Rubber",
+                    area: sectionGlassAreaSqFt,
+                    unit: "sqft",
+                    rate: rubberRate,
+                    cost: sectionGlassAreaSqFt * rubberRate,
                 }]
                 : [];
 
             const meshRate = typeRates?.meshRate || 0;
             const trackCapRate = typeRates?.trackCapRate || 0;
+            const brushRate = rateCard?.brushRatePerSqft || 0;
             const meshName = inputSection?.mosquitoMeshGrade
                 ? `Mosquito Mesh (${inputSection.mosquitoMeshGrade})`
                 : "Mosquito Mesh / C-Channel";
@@ -531,6 +589,12 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                     ? [{ name: meshName, quantity: section.accessories.mosquitoCChannel, unit: "nos", area: meshAreaSqFt || undefined, rate: meshRate, cost: section.accessories.mosquitoCChannel * meshRate }]
                     : []),
                 ...(section.accessories.trackCap > 0 ? [{ name: "Track Cap", quantity: section.accessories.trackCap, unit: "nos", rate: trackCapRate, cost: section.accessories.trackCap * trackCapRate }] : []),
+                ...(section.accessories.lock > 0 ? [{ name: LOCK_LABEL, quantity: section.accessories.lock, unit: "nos", rate: typeRates?.lockRate || 0, cost: section.accessories.lock * (typeRates?.lockRate || 0) }] : []),
+                ...(section.accessories.bearing > 0 ? [{ name: BEARING_LABEL, quantity: section.accessories.bearing, unit: "nos", rate: typeRates?.bearingRate || 0, cost: section.accessories.bearing * (typeRates?.bearingRate || 0) }] : []),
+                ...(section.accessories.corner > 0 ? [{ name: CORNER_LABEL, quantity: section.accessories.corner, unit: "nos", rate: typeRates?.cornerRate || 0, cost: section.accessories.corner * (typeRates?.cornerRate || 0) }] : []),
+                ...(section.accessories.connector > 0 ? [{ name: PVC_CONNECTOR_LABEL, quantity: section.accessories.connector, unit: "nos", rate: typeRates?.connectorRate || 0, cost: section.accessories.connector * (typeRates?.connectorRate || 0) }] : []),
+                ...(section.accessories.cap > 0 ? [{ name: MALE_FEMALE_CAP_LABEL, quantity: section.accessories.cap, unit: "nos", rate: typeRates?.capRate || 0, cost: section.accessories.cap * (typeRates?.capRate || 0) }] : []),
+                ...(areaSqFt > 0 ? [{ name: "Brush", area: areaSqFt, unit: "sqft", rate: brushRate, cost: areaSqFt * brushRate }] : []),
                 ...extraHardwareItems,
             ];
 
@@ -577,6 +641,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 ? [{ name: "Frame & Fabrication", area: areaSqFt, unit: "sqft", rate: section.frameRatePerSqft, cost: areaSqFt * section.frameRatePerSqft }]
                 : [];
 
+            const rubberRate = rateCard?.rubberRatePerSqft || 0;
             const glass: LineItem[] = areaSqFt > 0
                 ? [{
                     name: section.glassType || "Glass",
@@ -586,12 +651,22 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                     cost: areaSqFt * section.glassRate,
                     widthMm: section.width ?? undefined,
                     heightMm: section.height ?? undefined,
+                }, {
+                    name: "Rubber",
+                    area: areaSqFt,
+                    unit: "sqft",
+                    rate: rubberRate,
+                    cost: areaSqFt * rubberRate,
                 }]
                 : [];
 
-            const accessories: LineItem[] = (extraHardware[section.id] || [])
-                .filter((item) => item.name.trim())
-                .map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit, rate: item.rate, cost: item.quantity * item.rate }));
+            const brushRate = rateCard?.brushRatePerSqft || 0;
+            const accessories: LineItem[] = [
+                ...(areaSqFt > 0 ? [{ name: "Brush", area: areaSqFt, unit: "sqft", rate: brushRate, cost: areaSqFt * brushRate }] : []),
+                ...(extraHardware[section.id] || [])
+                    .filter((item) => item.name.trim())
+                    .map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit, rate: item.rate, cost: item.quantity * item.rate })),
+            ];
 
             const subtotal =
                 profiles.reduce((s, p) => s + p.cost, 0) +
@@ -633,6 +708,23 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         const meshCount = sectionResults.reduce((sum, s) => sum + s.accessories.mosquitoCChannel, 0);
         const trackCapCount = sectionResults.reduce((sum, s) => sum + s.accessories.trackCap, 0);
         const totalAccessoryCost = sectionBreakdowns.reduce((sum, s) => sum + s.accessories.reduce((ss, a) => ss + a.cost, 0), 0);
+
+        const breakdownByName = new Map<string, { cost: number; amount: number; unit: string }>();
+        sectionBreakdowns.forEach((s) => {
+            [...s.profiles, ...s.glass, ...s.accessories].forEach((line) => {
+                const existing = breakdownByName.get(line.name) || { cost: 0, amount: 0, unit: line.unit };
+                breakdownByName.set(line.name, {
+                    cost: existing.cost + line.cost,
+                    amount: existing.amount + (line.quantity ?? line.area ?? 0),
+                    unit: line.unit,
+                });
+            });
+        });
+        const costBreakdownByName = Array.from(breakdownByName.entries())
+            .map(([name, { cost, amount, unit }]) => ({ name, cost, amount, unit }))
+            .filter((line) => line.cost > 0)
+            .sort((a, b) => b.cost - a.cost);
+        const totalCoatingKg = breakdownByName.get("Coating")?.amount || 0;
         // Derived from the section breakdowns rather than the original worksheet
         // input, so it's correct for manual (no-worksheet) quotations too — those
         // have no `windowInput`, only `manualSections`, which already feed into
@@ -669,6 +761,8 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
             meshCount,
             trackCapCount,
             totalAccessoryCost,
+            costBreakdownByName,
+            totalCoatingKg,
             laborCost,
             ...computed,
         };
@@ -683,6 +777,8 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         itemDetailOverrides,
         manualSections,
         extraHardware,
+        coatingRatePerKg,
+        coatingWastagePercent,
         laborMode,
         laborFlatAmount,
         laborPercent,
@@ -1004,6 +1100,35 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                         {/* Step 2: Rates & Sections (worksheet) or Window Sections (manual) */}
                         {step === 1 && (worksheetId ? (
                             <>
+                                {/* Coating — one rate for the whole quote (weight is still
+                                    per aluminium system, edited below as kg/ft). */}
+                                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-3">
+                                    <div className="border-b pb-2">
+                                        <h2 className="font-semibold text-lg text-text">Coating</h2>
+                                        <p className="text-xs text-text-muted mt-1">Applied to every system's profile weight (kg/ft, set per system below).</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-md">
+                                        <div>
+                                            <Label className="text-[11px] mb-0.5 leading-tight">Coating Rate (₹/kg)</Label>
+                                            <Input
+                                                type="number"
+                                                className="h-8 text-sm"
+                                                value={coatingRatePerKg || ""}
+                                                onChange={(e) => setCoatingRatePerKg(parseFloat(e.target.value) || 0)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label className="text-[11px] mb-0.5 leading-tight">Wastage (%)</Label>
+                                            <Input
+                                                type="number"
+                                                className="h-8 text-sm"
+                                                value={coatingWastagePercent || ""}
+                                                onChange={(e) => setCoatingWastagePercent(parseFloat(e.target.value) || 0)}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {/* Rates by System Type — sections sharing the same aluminium
                                     system automatically share these rates; a different system
                                     used elsewhere in the quote gets its own independent block. */}
@@ -1062,6 +1187,83 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                                         })}
                                                     />
                                                 </div>
+                                                <div>
+                                                    <Label className="text-[11px] mb-0.5 leading-tight">Lock (₹)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        className="h-8 text-sm"
+                                                        value={typeRate.lockRate || ""}
+                                                        onChange={(e) => setSectionTypeRates({
+                                                            ...sectionTypeRates,
+                                                            [typeRate.sectionTypeKey]: { ...typeRate, lockRate: parseFloat(e.target.value) || 0 },
+                                                        })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label className="text-[11px] mb-0.5 leading-tight">Bearing (₹)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        className="h-8 text-sm"
+                                                        value={typeRate.bearingRate || ""}
+                                                        onChange={(e) => setSectionTypeRates({
+                                                            ...sectionTypeRates,
+                                                            [typeRate.sectionTypeKey]: { ...typeRate, bearingRate: parseFloat(e.target.value) || 0 },
+                                                        })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label className="text-[11px] mb-0.5 leading-tight">Corner (₹)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        className="h-8 text-sm"
+                                                        value={typeRate.cornerRate || ""}
+                                                        onChange={(e) => setSectionTypeRates({
+                                                            ...sectionTypeRates,
+                                                            [typeRate.sectionTypeKey]: { ...typeRate, cornerRate: parseFloat(e.target.value) || 0 },
+                                                        })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label className="text-[11px] mb-0.5 leading-tight">PVC Connector (₹)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        className="h-8 text-sm"
+                                                        value={typeRate.connectorRate || ""}
+                                                        onChange={(e) => setSectionTypeRates({
+                                                            ...sectionTypeRates,
+                                                            [typeRate.sectionTypeKey]: { ...typeRate, connectorRate: parseFloat(e.target.value) || 0 },
+                                                        })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label className="text-[11px] mb-0.5 leading-tight">Male-Female Cap (₹)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        className="h-8 text-sm"
+                                                        value={typeRate.capRate || ""}
+                                                        onChange={(e) => setSectionTypeRates({
+                                                            ...sectionTypeRates,
+                                                            [typeRate.sectionTypeKey]: { ...typeRate, capRate: parseFloat(e.target.value) || 0 },
+                                                        })}
+                                                    />
+                                                </div>
+                                                {Object.keys(typeRate.profileWeightRates).map((category) => (
+                                                    <div key={`weight-${category}`}>
+                                                        <Label className="text-[11px] mb-0.5 leading-tight">{MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category} (kg/ft)</Label>
+                                                        <Input
+                                                            type="number"
+                                                            className="h-8 text-sm"
+                                                            value={typeRate.profileWeightRates[category] || ""}
+                                                            onChange={(e) => setSectionTypeRates({
+                                                                ...sectionTypeRates,
+                                                                [typeRate.sectionTypeKey]: {
+                                                                    ...typeRate,
+                                                                    profileWeightRates: { ...typeRate.profileWeightRates, [category]: parseFloat(e.target.value) || 0 },
+                                                                },
+                                                            })}
+                                                        />
+                                                    </div>
+                                                ))}
                                             </div>
 
                                             {rateCard && Object.keys(rateCard.glassRates).length > 0 && (
@@ -1516,19 +1718,34 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                             <p className="text-xs text-text-inverse/50 -mt-4">Internal figures — this breakdown is never shown to the customer.</p>
 
                             <div className="space-y-4 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-text-inverse/70">Profiles Cost</span>
-                                    <span>{formatCurrency(totals.totalProfileCost)}</span>
+                                <div className="flex justify-between text-text-inverse/70 text-xs">
+                                    <span>Total Area Used</span>
+                                    <span>{totals.overallAreaSqFt.toFixed(2)} sqft</span>
                                 </div>
-                                <div className="flex justify-between">
-                                    <span className="text-text-inverse/70">Glass Cost</span>
-                                    <span>{formatCurrency(totals.totalGlassCost)}</span>
+                                <div className="flex justify-between text-text-inverse/70 text-xs -mt-3">
+                                    <span>Total Glass Used</span>
+                                    <span>{totals.totalGlassAreaSqFt.toFixed(2)} sqft</span>
                                 </div>
-                                <div className="flex justify-between">
-                                    <span className="text-text-inverse/70">Accessories</span>
-                                    <span>{formatCurrency(totals.totalAccessoryCost)}</span>
+                                {totals.totalCoatingKg > 0 && (
+                                    <div className="flex justify-between text-text-inverse/70 text-xs -mt-3">
+                                        <span>Total Coated Weight</span>
+                                        <span>{totals.totalCoatingKg.toFixed(2)} kg</span>
+                                    </div>
+                                )}
+                                <div className="space-y-1.5 border-t border-white/20 pt-3">
+                                    {totals.costBreakdownByName.map((line) => (
+                                        <div key={line.name} className="flex justify-between">
+                                            <span className="text-text-inverse/70">
+                                                {line.name}
+                                                {line.amount > 0 && (
+                                                    <span className="text-text-inverse/40"> ({line.amount.toFixed(2)} {line.unit})</span>
+                                                )}
+                                            </span>
+                                            <span>{formatCurrency(line.cost)}</span>
+                                        </div>
+                                    ))}
                                 </div>
-                                <div className="flex justify-between">
+                                <div className="flex justify-between border-t border-white/20 pt-2">
                                     <span className="text-text-inverse/70">Labor & Overhead</span>
                                     <span>{formatCurrency(totals.laborCost + Number(overheadCost))}</span>
                                 </div>

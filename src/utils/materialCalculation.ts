@@ -20,9 +20,19 @@ interface PieceCount {
   count: number;
 }
 
+type SectionAccessories = {
+  mosquitoCChannel: number;
+  trackCap: number;
+  lock: number;
+  bearing: number;
+  corner: number;
+  connector: number;
+  cap: number;
+};
+
 interface SectionMaterialsResult {
   materials: MaterialRequirement[];
-  accessories: { mosquitoCChannel: number; trackCap: number };
+  accessories: SectionAccessories;
   glassInfo: DimensionGlassInfo[];
 }
 
@@ -129,21 +139,41 @@ function calculateAccessories(
   dimensions: WindowDimension[],
   calculateAccessoriesFn: (
     quantity: number
-  ) => { mosquitoCChannel: number; trackCap: number }
-): { mosquitoCChannel: number; trackCap: number } {
+  ) => { mosquitoCChannel: number; trackCap: number },
+  calculateHardwareCountsFn: (
+    quantity: number
+  ) => { lock: number; bearing: number; corner: number; connector: number; cap: number }
+): SectionAccessories {
   let totalMosquitoCChannel = 0;
   let totalTrackCap = 0;
+  let totalLock = 0;
+  let totalBearing = 0;
+  let totalCorner = 0;
+  let totalConnector = 0;
+  let totalCap = 0;
 
   dimensions.forEach((dim) => {
     const quantity = dim.quantity!;
     const accessories = calculateAccessoriesFn(quantity);
     totalMosquitoCChannel += accessories.mosquitoCChannel;
     totalTrackCap += accessories.trackCap;
+
+    const hardware = calculateHardwareCountsFn(quantity);
+    totalLock += hardware.lock;
+    totalBearing += hardware.bearing;
+    totalCorner += hardware.corner;
+    totalConnector += hardware.connector;
+    totalCap += hardware.cap;
   });
 
   return {
     mosquitoCChannel: totalMosquitoCChannel,
     trackCap: totalTrackCap,
+    lock: totalLock,
+    bearing: totalBearing,
+    corner: totalCorner,
+    connector: totalConnector,
+    cap: totalCap,
   };
 }
 
@@ -412,7 +442,7 @@ export function calculateSectionMaterials(
   if (validDimensions.length === 0) {
     return {
       materials: [],
-      accessories: { mosquitoCChannel: 0, trackCap: 0 },
+      accessories: { mosquitoCChannel: 0, trackCap: 0, lock: 0, bearing: 0, corner: 0, connector: 0, cap: 0 },
       glassInfo: [],
     };
   }
@@ -468,7 +498,8 @@ export function calculateSectionMaterials(
   // Calculate accessories
   const accessories = calculateAccessories(
     validDimensions,
-    sectionConfig.calculateAccessories
+    sectionConfig.calculateAccessories,
+    sectionConfig.calculateHardwareCounts
   );
 
   return {

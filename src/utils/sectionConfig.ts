@@ -39,6 +39,15 @@ export interface SectionTypeConfig {
     mosquitoCChannel: number;
     trackCap: number;
   };
+  calculateHardwareCounts: (
+    quantity: number
+  ) => {
+    lock: number;
+    bearing: number;
+    corner: number;
+    connector: number;
+    cap: number;
+  };
   getShutterLabel: () => string;
   calculateTrackRailPieces: (sectionWidth: number, quantity: number) => { length: number; count: number };
   calculateMullionPieces: (sectionHeight: number, quantity: number, numberOfSections?: number) => { length: number; count: number } | null;
@@ -139,6 +148,15 @@ export function getSectionConfig(
         mosquitoCChannel:
           configuration === "glass-mosquito" && trackType === "3-track" ? quantity : 0,
         trackCap: quantity,
+      };
+    },
+    calculateHardwareCounts: (quantity: number) => {
+      return {
+        lock: (dbConfig.lockCount || 0) * quantity,
+        bearing: (dbConfig.bearingCount || 0) * quantity,
+        corner: (dbConfig.cornerCount || 0) * quantity,
+        connector: (dbConfig.connectorCount || 0) * quantity,
+        cap: (dbConfig.capCount || 0) * quantity,
       };
     },
     getShutterLabel: () => {
