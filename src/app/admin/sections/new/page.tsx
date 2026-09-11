@@ -15,10 +15,12 @@ export default async function NewSectionPage() {
         redirect("/dashboard");
     }
 
+    const hardwareCatalog = await db.hardwareItem.findMany({ orderBy: { sortOrder: "asc" } });
+
     return (
         <PageContainer size="medium">
             <h1 className="text-2xl font-bold text-text mb-6">Create New Section</h1>
-            <SectionForm />
+            <SectionForm hardwareCatalog={hardwareCatalog} />
         </PageContainer>
     );
 }

@@ -5,6 +5,12 @@
 
 import { GlassSize } from "../types";
 import { SectionConfiguration } from "@prisma/client";
+import {
+  normalizeHardwareCounts,
+  legacyHardwareCountsFromConfig,
+  scaleHardwareCounts,
+  type HardwareCountMap,
+} from "./hardwareCatalog";
 
 export type TrackType = "2-track" | "3-track";
 export type Configuration = "all-glass" | "glass-mosquito";
@@ -39,15 +45,9 @@ export interface SectionTypeConfig {
     mosquitoCChannel: number;
     trackCap: number;
   };
-  calculateHardwareCounts: (
-    quantity: number
-  ) => {
-    lock: number;
-    bearing: number;
-    corner: number;
-    connector: number;
-    cap: number;
-  };
+  /** Per-window hardware counts scaled by `quantity`, keyed by
+   * HardwareItem.key. Empty when this configuration has no hardware set. */
+  calculateHardwareCounts: (quantity: number) => HardwareCountMap;
   getShutterLabel: () => string;
   calculateTrackRailPieces: (sectionWidth: number, quantity: number) => { length: number; count: number };
   calculateMullionPieces: (sectionHeight: number, quantity: number, numberOfSections?: number) => { length: number; count: number } | null;
@@ -74,6 +74,7 @@ export function getSectionConfig(
   const numberOfShutters = trackType === "3-track" ? 3 : 2;
   const numberOfGlassShutters =
     configuration === "all-glass" ? numberOfShutters : numberOfShutters - 1;
+  const dbConfigHardware = normalizeHardwareCounts(dbConfig.hardwareCounts);
   /**
    * Single source of truth for calculating final dimensions
    * This function calculates both shutter width and height with corrections applied
@@ -151,13 +152,12 @@ export function getSectionConfig(
       };
     },
     calculateHardwareCounts: (quantity: number) => {
-      return {
-        lock: (dbConfig.lockCount || 0) * quantity,
-        bearing: (dbConfig.bearingCount || 0) * quantity,
-        corner: (dbConfig.cornerCount || 0) * quantity,
-        connector: (dbConfig.connectorCount || 0) * quantity,
-        cap: (dbConfig.capCount || 0) * quantity,
-      };
+      // Prefer the dynamic map; fall back to the deprecated per-item columns so
+      // a configuration the backfill hasn't reached still prices correctly.
+      const perWindow = Object.keys(dbConfigHardware).length > 0
+        ? dbConfigHardware
+        : legacyHardwareCountsFromConfig(dbConfig);
+      return scaleHardwareCounts(perWindow, quantity);
     },
     getShutterLabel: () => {
       if (trackType === "3-track") {

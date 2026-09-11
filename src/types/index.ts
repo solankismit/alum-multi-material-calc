@@ -110,20 +110,30 @@ export interface GlassSize {
   totalArea: number; // mm² (area × number of shutters × quantity)
 }
 
+/**
+ * Accessory/hardware totals for a calculated section.
+ *
+ * `mosquitoCChannel` and `trackCap` are derived from the track type and
+ * configuration rather than from per-window counts, so they stay as their own
+ * fields. Everything else is keyed by HardwareItem.key — see
+ * src/utils/hardwareCatalog.ts. Read `hardware` through
+ * `normalizeHardwareCounts()`: worksheets saved before the catalog existed
+ * persist the old five-named-field shape inside `Worksheet.data`.
+ *
+ * This is the single declaration of this shape — do not redeclare it locally.
+ */
+export interface SectionAccessories {
+  mosquitoCChannel: number;
+  trackCap: number;
+  hardware: Record<string, number>;
+}
+
 export interface SectionResult {
   sectionId: string;
   sectionName: string;
   sectionTypeName?: string;
   materials: MaterialRequirement[];
-  accessories: {
-    mosquitoCChannel: number;
-    trackCap: number;
-    lock: number;
-    bearing: number;
-    corner: number;
-    connector: number;
-    cap: number;
-  };
+  accessories: SectionAccessories;
   glassInfo: DimensionGlassInfo[];
   summary: {
     totalMaterial: number;

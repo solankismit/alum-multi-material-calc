@@ -32,10 +32,12 @@ export default async function EditSectionPage({
         notFound();
     }
 
+    const hardwareCatalog = await db.hardwareItem.findMany({ orderBy: { sortOrder: "asc" } });
+
     return (
         <PageContainer size="medium">
             <h1 className="text-2xl font-bold text-text mb-6">Edit Section: {section.name}</h1>
-            <SectionForm initialData={section} isEdit />
+            <SectionForm initialData={section} isEdit hardwareCatalog={hardwareCatalog} />
         </PageContainer>
     );
 }

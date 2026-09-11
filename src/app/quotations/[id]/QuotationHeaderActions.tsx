@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
-import { ArrowLeft, Copy, List, Pencil, Receipt } from "lucide-react";
+import { ArrowLeft, Copy, List, Pencil, Receipt, Calculator } from "lucide-react";
 import { duplicateQuotation } from "../actions";
 
 interface QuotationHeaderActionsProps {
@@ -50,6 +50,16 @@ export default function QuotationHeaderActions({ id, worksheetId, locked }: Quot
                     </Button>
                 </Link>
             )}
+            {/* Internal costs live on their own page: printing there must not
+                lock the quotation, and cost figures must stay out of the
+                customer PDF snapshot. Available even when locked — a locked
+                quotation can't be edited but its costs are still worth reading. */}
+            <Link href={`/quotations/${id}/cost-sheet`}>
+                <Button variant="outline">
+                    <Calculator className="w-4 h-4 mr-2" />
+                    Cost Sheet
+                </Button>
+            </Link>
             {!locked && (
                 <Link href={`/quotations/create?editId=${id}`}>
                     <Button variant="outline">

@@ -8,7 +8,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
 import { useState } from "react";
 import WindowSchematic from "@/components/WindowSchematic";
-import { feetToMm, mmToFeet } from "@/utils/formatters";
+import { parseLength, formatLength, UNIT_LABELS, type LengthUnit } from "@/utils/units";
 import type { RateMap } from "./QuotationBuilder";
 import type { ItemPosition, ItemSpecDetails } from "@/utils/quotationPricing";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -43,7 +43,7 @@ export interface ManualHardwareItem {
 
 interface ManualSectionFormProps {
     section: ManualSection;
-    unitMode: "mm" | "ft";
+    unitMode: LengthUnit;
     glassRates: RateMap;
     canRemove: boolean;
     onUpdate: (updates: Partial<ManualSection>) => void;
@@ -81,20 +81,35 @@ export default function ManualSectionForm({
     onTogglePleatedMosquito,
     customFieldDefinitions,
 }: ManualSectionFormProps) {
-    const displayValue = (mm: number | null) => (mm === null ? "" : unitMode === "ft" ? mmToFeet(mm) : mm);
-
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+    // Holds what the user is typing, per field, for any unit other than mm.
+    // Without it, re-deriving the display from the stored mm on every keystroke
+    // fights the typing — and for in-dora the display quantizes to 3.175mm, so
+    // it would not even round-trip.
+    const [rawDims, setRawDims] = useState<{ height?: string; width?: string }>({});
+
+    const displayValue = (field: "height" | "width") => {
+        const mm = section[field];
+        if (unitMode !== "mm") {
+            return rawDims[field] ?? (mm === null ? "" : formatLength(mm, unitMode));
+        }
+        return mm === null ? "" : String(mm);
+    };
 
     const handleDimensionChange = (field: "height" | "width", value: string) => {
         if (value === "") {
+            setRawDims((prev) => ({ ...prev, [field]: undefined }));
             onUpdate({ [field]: null });
             return;
         }
-        const num = Number(value);
-        if (isNaN(num)) return;
-        onUpdate({ [field]: unitMode === "ft" ? feetToMm(num) : num });
+        if (unitMode !== "mm") setRawDims((prev) => ({ ...prev, [field]: value }));
+        const mm = parseLength(value, unitMode);
+        if (mm !== null) onUpdate({ [field]: mm });
     };
+
+    const commitDimension = (field: "height" | "width") =>
+        setRawDims((prev) => ({ ...prev, [field]: undefined }));
 
     const updateDetails = (updates: ItemSpecDetails) => {
         onUpdate({ details: { ...section.details, ...updates } });
@@ -188,21 +203,25 @@ export default function ManualSectionForm({
 
                     <div className="grid grid-cols-3 gap-2">
                         <div>
-                            <Label className="text-xs">Height ({unitMode})</Label>
+                            <Label className="text-xs">Height ({UNIT_LABELS[unitMode]})</Label>
                             <Input
-                                type="number"
-                                value={displayValue(section.height)}
+                                type={unitMode === "inDora" ? "text" : "number"}
+                                inputMode={unitMode === "inDora" ? "text" : "decimal"}
+                                value={displayValue("height")}
                                 onChange={(e) => handleDimensionChange("height", e.target.value)}
-                                placeholder="Height"
+                                onBlur={() => commitDimension("height")}
+                                placeholder={unitMode === "inDora" ? 'e.g. 47-3' : "Height"}
                             />
                         </div>
                         <div>
-                            <Label className="text-xs">Width ({unitMode})</Label>
+                            <Label className="text-xs">Width ({UNIT_LABELS[unitMode]})</Label>
                             <Input
-                                type="number"
-                                value={displayValue(section.width)}
+                                type={unitMode === "inDora" ? "text" : "number"}
+                                inputMode={unitMode === "inDora" ? "text" : "decimal"}
+                                value={displayValue("width")}
                                 onChange={(e) => handleDimensionChange("width", e.target.value)}
-                                placeholder="Width"
+                                onBlur={() => commitDimension("width")}
+                                placeholder={unitMode === "inDora" ? 'e.g. 47-3' : "Width"}
                             />
                         </div>
                         <div>

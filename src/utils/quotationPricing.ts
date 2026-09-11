@@ -6,8 +6,48 @@ export type TaxType = "CGST_SGST" | "IGST";
 
 export const DEFAULT_TAX_TYPE: TaxType = "CGST_SGST";
 
+/** Stable `LineItem.key` values for the lines this app generates itself.
+ *
+ * These exist so readers stop identifying lines by their display name, which
+ * broke as soon as two lines could look alike (the mosquito-mesh line was
+ * detected by "has an area and mentions mesh" once Brush also carried an
+ * area). Hardware lines use their catalog key instead of a value from here.
+ *
+ * Never rename one of these — historical quotations store them verbatim. */
+export const LINE_KEYS = {
+  /** The combined Frame+Shutter+Interlock (or whatever the material group is). */
+  profileGroup: "profile_group",
+  coating: "coating",
+  glass: "glass",
+  rubber: "rubber",
+  brush: "brush",
+  mosquitoMesh: "mosquito_mesh",
+  trackCap: "track_cap",
+  /** Manual sections' flat area-priced frame line. */
+  frameFabrication: "frame_fabrication",
+} as const;
+
+/** One member of a combined line item — e.g. the Frame/Shutter/Interlock rows
+ * behind a single "Material" line. Deliberately NOT a full LineItem (no
+ * nesting, no cost of its own): a combined line is priced as one quantity at
+ * one rate, and these only record how that quantity is made up. */
+export interface LineItemComponent {
+  name: string;
+  /** Stable identifier — a MaterialCategory for profile members. */
+  key?: string;
+  quantity: number;
+  unit: string;
+}
+
 export interface LineItem {
   name: string;
+  /** Stable identifier for lines the app generates itself (e.g. "coating",
+   * "profile_group", "mosquito_mesh", or a hardware catalog key). Absent on
+   * free-text lines the user typed, and on every line saved before this field
+   * existed — so readers must treat a missing key as "match by name instead",
+   * never as "not this item". The presence of a key is also what distinguishes
+   * an auto-computed line from a user-entered one. */
+  key?: string;
   quantity?: number;
   area?: number;
   unit: string;
@@ -15,6 +55,8 @@ export interface LineItem {
   cost: number;
   widthMm?: number;
   heightMm?: number;
+  /** Present only on combined lines; see LineItemComponent. */
+  components?: LineItemComponent[];
 }
 
 /** Where this item goes on site — e.g. "W01 GF Living Room". Purely descriptive, never priced. */
@@ -137,8 +179,18 @@ const itemPositionSchema = z.object({
 // list must still round-trip as historical data, not be rejected on save.
 const itemSpecDetailsSchema = z.record(z.string(), z.string());
 
+// Flat (non-recursive) on purpose — a component never carries components of
+// its own, which keeps this a plain object schema instead of a z.lazy cycle.
+const lineItemComponentSchema = z.object({
+  name: z.string(),
+  key: z.string().optional(),
+  quantity: z.number(),
+  unit: z.string(),
+});
+
 const lineItemSchema = z.object({
   name: z.string(),
+  key: z.string().optional(),
   quantity: z.number().optional(),
   area: z.number().optional(),
   unit: z.string(),
@@ -146,6 +198,7 @@ const lineItemSchema = z.object({
   cost: z.number(),
   widthMm: z.number().optional(),
   heightMm: z.number().optional(),
+  components: z.array(lineItemComponentSchema).optional(),
 });
 
 const sectionPricingSchema = z.object({
@@ -251,6 +304,78 @@ export interface TotalsResult {
   taxableAmount: number;
   taxAmount: number;
   finalTotal: number;
+}
+
+/**
+ * Derives every total from a saved quotation's persisted pricing.
+ *
+ * The view page used to reimplement this inline while `computeTotals` sat
+ * unused beside it; the cost sheets need exactly the same figures, and any
+ * future per-line tax has to change one formula rather than three. Amounts
+ * that were fixed at save time (the discount in particular, whose value
+ * depends on the subtotal as it stood then) are trusted from the record
+ * rather than recomputed.
+ */
+export function deriveQuotationTotals(pricing: PricingData) {
+  const usesSections = Array.isArray(pricing.sections) && pricing.sections.length > 0;
+
+  const sum = (lines: LineItem[]) => lines.reduce((acc, line) => acc + line.cost, 0);
+
+  let profilesTotal = 0;
+  let glassTotal = 0;
+  let accessoriesTotal = 0;
+
+  if (usesSections) {
+    pricing.sections!.forEach((section) => {
+      profilesTotal += sum(section.profiles);
+      glassTotal += sum(section.glass);
+      accessoriesTotal += sum(section.accessories);
+    });
+  } else {
+    profilesTotal = sum(pricing.profiles);
+    glassTotal = sum(pricing.glass);
+    accessoriesTotal = sum(pricing.accessories);
+  }
+
+  const materialCost = profilesTotal + glassTotal + accessoriesTotal;
+  const laborCost = pricing.labor || 0;
+  const overheadCost = pricing.overhead || 0;
+
+  const installationAmount = pricing.installation?.included ? pricing.installation.amount || 0 : 0;
+  const transportationAmount = pricing.transportation?.included ? pricing.transportation.amount || 0 : 0;
+
+  const subTotal = materialCost + laborCost + overheadCost + installationAmount + transportationAmount;
+  const discountAmount = pricing.discount?.amount || 0;
+  const discountedSubtotal = Math.max(0, subTotal - discountAmount);
+  const profitMargin = pricing.profitMargin || 0;
+  const taxRate = pricing.taxRate || 0;
+  const profitAmount = discountedSubtotal * (profitMargin / 100);
+  const taxableAmount = discountedSubtotal + profitAmount;
+  const taxAmount = taxableAmount * (taxRate / 100);
+
+  return {
+    usesSections,
+    profilesTotal,
+    glassTotal,
+    accessoriesTotal,
+    /** Production cost before labour — material and hardware only. */
+    materialCost,
+    laborCost,
+    overheadCost,
+    installationAmount,
+    transportationAmount,
+    /** What the job costs to make: material + labour. No overhead, no margin. */
+    productionCost: materialCost + laborCost,
+    subTotal,
+    discountAmount,
+    discountedSubtotal,
+    profitMargin,
+    profitAmount,
+    taxRate,
+    taxableAmount,
+    taxAmount,
+    finalTotal: taxableAmount + taxAmount,
+  };
 }
 
 /** The single shared discount -> profit -> tax formula, used by both the builder and the printed view. */

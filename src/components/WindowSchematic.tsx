@@ -1,8 +1,12 @@
 "use strict";
 
 import React from 'react';
+import { formatLength, UNIT_LABELS, type LengthUnit } from "@/utils/units";
 
 interface WindowSchematicProps {
+    /** Unit for the dimension callouts. Defaults to mm, so every existing
+     * call site renders exactly as before. */
+    displayUnit?: LengthUnit;
     trackType: "2-track" | "3-track" | "openable" | string;
     configuration: "all-glass" | "glass-mosquito" | string;
     sections?: number;
@@ -15,7 +19,7 @@ interface WindowSchematicProps {
 
 type Panel = { type: string; track: number; offset: number; widthRatio: number };
 
-export default function WindowSchematic({ trackType, configuration, sections = 2, className = "", widthMm, heightMm }: WindowSchematicProps) {
+export default function WindowSchematic({ trackType, configuration, sections = 2, className = "", widthMm, heightMm, displayUnit = "mm" }: WindowSchematicProps) {
     // Canvas Logic — frame/panel drawing below is unchanged; it's wrapped in a
     // translated <g> so a gutter can be reserved for dimension lines without
     // touching any of this layout math.
@@ -419,7 +423,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                     <line x1={dimGutter + padding} y1={dimGutter - 12} x2={dimGutter + padding} y2={dimGutter - 4} stroke="var(--color-text)" strokeWidth="1" />
                     <line x1={dimGutter + width - padding} y1={dimGutter - 12} x2={dimGutter + width - padding} y2={dimGutter - 4} stroke="var(--color-text)" strokeWidth="1" />
                     <text x={dimGutter + width / 2} y={dimGutter - 16} textAnchor="middle" fontSize="11" fill="var(--color-text)" fontWeight="600">
-                        {Math.round(widthMm)} mm
+                        {formatLength(widthMm, displayUnit)} {UNIT_LABELS[displayUnit]}
                     </text>
                 </g>
             )}
@@ -439,7 +443,7 @@ export default function WindowSchematic({ trackType, configuration, sections = 2
                         fontWeight="600"
                         transform={`rotate(-90 16 ${dimGutter + height / 2})`}
                     >
-                        {Math.round(heightMm)} mm
+                        {formatLength(heightMm, displayUnit)} {UNIT_LABELS[displayUnit]}
                     </text>
                 </g>
             )}

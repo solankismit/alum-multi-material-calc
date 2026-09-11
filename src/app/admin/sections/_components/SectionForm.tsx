@@ -14,14 +14,77 @@ import {
 } from "@/components/ui/Select";
 import { Plus, Trash2, Save, ArrowLeft, Wand2 } from "lucide-react";
 import type { SectionWithConfigs } from "@/types";
+import type { HardwareItemData } from "@/utils/hardwareCatalog";
+import UnitToggle from "@/components/ui/UnitToggle";
+import {
+    parseLength,
+    formatLength,
+    isLossyInUnit,
+    UNIT_LABELS,
+    DEDUCTION_UNITS,
+    DIMENSION_UNITS,
+    type LengthUnit,
+} from "@/utils/units";
 import { uiStyles } from "@/lib/utils";
 
 interface SectionFormProps {
     initialData?: SectionWithConfigs | null;
     isEdit?: boolean;
+    /** Admin-managed hardware catalog, fetched server-side. Drives the
+     * per-window count inputs on each configuration. */
+    hardwareCatalog: HardwareItemData[];
 }
 
-export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
+/**
+ * A deduction constant, entered in whichever unit suits. Stored as mm.
+ *
+ * Keeps a raw text buffer while focused so typing isn't reformatted underneath
+ * the user — the dora units quantize to 3.175mm, so re-deriving the display
+ * from the stored value on each keystroke would be actively hostile.
+ */
+function DeductionInput({
+    label,
+    unit,
+    value,
+    onChange,
+}: {
+    label: string;
+    unit: LengthUnit;
+    value: number;
+    onChange: (mm: number) => void;
+}) {
+    const [raw, setRaw] = useState<string | null>(null);
+    const displayed = raw ?? formatLength(value ?? 0, unit);
+    const lossy = raw === null && unit !== "mm" && isLossyInUnit(value ?? 0, unit);
+
+    return (
+        <div>
+            <Label className="mb-1 text-xs">
+                {label} <span className="text-slate-400">({UNIT_LABELS[unit]})</span>
+            </Label>
+            <Input
+                type={unit === "inDora" ? "text" : "number"}
+                step={unit === "mm" ? "0.001" : "1"}
+                value={displayed}
+                onChange={(e) => {
+                    setRaw(e.target.value);
+                    const mm = parseLength(e.target.value, unit);
+                    if (mm !== null) onChange(mm);
+                }}
+                onBlur={() => setRaw(null)}
+            />
+            {/* The stored value isn't a whole number of dora, so this display is
+                rounded. Say so rather than letting a silent 0.5mm drift in. */}
+            {lossy && (
+                <p className="text-[10px] text-amber-600 mt-0.5">
+                    Rounded for display — stored as {value}mm
+                </p>
+            )}
+        </div>
+    );
+}
+
+export default function SectionForm({ initialData, isEdit, hardwareCatalog }: SectionFormProps) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [name, setName] = useState(initialData?.name || "");
@@ -46,11 +109,7 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
             separateMosquitoNet: false,
             differentFrameMaterials: false,
             hasTrackRail: true,
-            lockCount: 0,
-            bearingCount: 0,
-            cornerCount: 0,
-            connectorCount: 0,
-            capCount: 0,
+            hardwareCounts: {},
         }
     ]);
 
@@ -69,15 +128,13 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
             separateMosquitoNet: false,
             differentFrameMaterials: false,
             hasTrackRail: true,
-            lockCount: 0,
-            bearingCount: 0,
-            cornerCount: 0,
-            connectorCount: 0,
-            capCount: 0,
+            hardwareCounts: {},
         }]);
         setExamples([...examples, {}]);
         setExamplesB([...examplesB, {}]);
         setShowSecondExample([...showSecondExample, false]);
+        setDeductionUnits([...deductionUnits, "mm"]);
+        setExampleUnits([...exampleUnits, "mm"]);
     };
 
     const handleRemoveConfig = (index: number) => {
@@ -85,11 +142,51 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
         setExamples(examples.filter((_, i) => i !== index));
         setExamplesB(examplesB.filter((_, i) => i !== index));
         setShowSecondExample(showSecondExample.filter((_, i) => i !== index));
+        setDeductionUnits(deductionUnits.filter((_, i) => i !== index));
+        setExampleUnits(exampleUnits.filter((_, i) => i !== index));
     };
 
     const handleConfigChange = (index: number, field: string, value: any) => {
         const newConfigs = [...configurations];
         newConfigs[index] = { ...newConfigs[index], [field]: value };
+        setConfigurations(newConfigs);
+    };
+
+    // Unit for the "derive from example" fields. Separate from the deduction
+    // unit below because these are whole-window measurements, not sub-inch
+    // corrections — feet make sense here and dora-only does not.
+    const [exampleUnits, setExampleUnits] = useState<LengthUnit[]>(
+        (initialData?.configurations || [{}]).map(() => "mm" as LengthUnit)
+    );
+    const setExampleUnit = (index: number, unit: LengthUnit) => {
+        const next = [...exampleUnits];
+        next[index] = unit;
+        setExampleUnits(next);
+    };
+
+    // Display unit for each configuration's deduction fields, per card. Not
+    // persisted: the values themselves are always mm.
+    const [deductionUnits, setDeductionUnits] = useState<LengthUnit[]>(
+        (initialData?.configurations || [{}]).map(() => "mm" as LengthUnit)
+    );
+    const setDeductionUnit = (index: number, unit: LengthUnit) => {
+        const next = [...deductionUnits];
+        next[index] = unit;
+        setDeductionUnits(next);
+    };
+
+    /** Writes one hardware item's per-window count. A zero is removed rather
+     * than stored, so `hardwareCounts` only ever lists hardware this window
+     * actually uses — which is what the pricing layer treats as meaningful. */
+    const handleHardwareCountChange = (index: number, key: string, value: number) => {
+        const newConfigs = [...configurations];
+        const counts = { ...(newConfigs[index].hardwareCounts || {}) };
+        if (!value || value <= 0) {
+            delete counts[key];
+        } else {
+            counts[key] = value;
+        }
+        newConfigs[index] = { ...newConfigs[index], hardwareCounts: counts };
         setConfigurations(newConfigs);
     };
 
@@ -146,7 +243,16 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
         const ex = examples[index] || {};
         const exB = examplesB[index] || {};
         const config = configurations[index];
-        const num = (v: string | undefined) => (v === "" || v === undefined ? NaN : Number(v));
+        // Parsed straight to mm, so every equation below — and the deduction
+        // values they produce — stays in mm regardless of what was typed.
+        const exampleUnit = exampleUnits[index] ?? "mm";
+        const num = (v: string | undefined) => {
+            if (v === "" || v === undefined) return NaN;
+            const mm = parseLength(v, exampleUnit);
+            return mm === null ? NaN : mm;
+        };
+        // Panel counts are plain integers, never a length.
+        const count = (v: string | undefined) => (v === "" || v === undefined ? NaN : Number(v));
 
         const sampleW = num(ex.sampleWidth);
         const sampleH = num(ex.sampleHeight);
@@ -175,10 +281,10 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                 updates.trackRailDeduction = round(sampleW - trackRailLen);
             }
         } else {
-            const n1 = Math.max(1, num(ex.panels) || 1);
+            const n1 = Math.max(1, count(ex.panels) || 1);
             updates.outerFrameHeightDeduction = round(sampleH - shutterH);
 
-            const n2 = Math.max(1, num(exB.panels) || 1);
+            const n2 = Math.max(1, count(exB.panels) || 1);
             const sampleWB = num(exB.sampleWidth);
             const shutterWB = num(exB.resultShutterWidth);
             const secondExampleUsable =
@@ -232,7 +338,7 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                 warnings.push("Resulting Track Rail Length was left blank — Track Rail Deduction was NOT updated (this section has a track rail).");
             }
         } else {
-            const n1Check = Math.max(1, num(ex.panels) || 1);
+            const n1Check = Math.max(1, count(ex.panels) || 1);
             if (n1Check > 1) {
                 const mullionLenACheck = num(ex.resultMullionLength);
                 const mullionLenBCheck = num(exB.resultMullionLength);
@@ -267,7 +373,7 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
             const trackRailLen = num(ex.resultTrackRailLength);
             if (!isNaN(trackRailLen)) lines.push({ label: "Track Rail Length", expected: trackRailLen, predicted: round(sampleW - final.trackRailDeduction) });
         } else {
-            const n1 = Math.max(1, num(ex.panels) || 1);
+            const n1 = Math.max(1, count(ex.panels) || 1);
             const finalMullion = Number(final.mullionWidthDeduction) || 0;
             const predShutterW = (sampleW - final.outerFrameWidthDeduction - (n1 - 1) * finalMullion) / n1;
             const predShutterH = sampleH - final.outerFrameHeightDeduction;
@@ -277,7 +383,7 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
             if (!isNaN(glassW)) lines.push({ label: "Glass Width", expected: glassW, predicted: round(predShutterW - final.glassWidthDeduction) });
             if (!isNaN(glassH)) lines.push({ label: "Glass Height", expected: glassH, predicted: round(predShutterH - final.glassHeightDeduction) });
 
-            const n2 = Math.max(1, num(exB.panels) || 1);
+            const n2 = Math.max(1, count(exB.panels) || 1);
             const shutterWB = num(exB.resultShutterWidth);
             if (showSecondExample[index] && !isNaN(shutterWB) && n2 !== n1) {
                 const sampleWB = num(exB.sampleWidth);
@@ -329,11 +435,7 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                 separateMosquitoNet: Boolean(c.separateMosquitoNet),
                 differentFrameMaterials: Boolean(c.differentFrameMaterials),
                 hasTrackRail: Boolean(c.hasTrackRail ?? true),
-                lockCount: Number(c.lockCount || 0),
-                bearingCount: Number(c.bearingCount || 0),
-                cornerCount: Number(c.cornerCount || 0),
-                connectorCount: Number(c.connectorCount || 0),
-                capCount: Number(c.capCount || 0),
+                hardwareCounts: c.hardwareCounts || {},
             })),
 
         };
@@ -457,9 +559,21 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                             </div>
 
                             <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 space-y-3">
-                                <div className="flex items-center gap-2 text-xs font-semibold text-indigo-900">
-                                    <Wand2 className="w-3.5 h-3.5" />
-                                    Derive from example (optional) — enter a real window and its measured result, the deductions below get filled in for you
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 text-xs font-semibold text-indigo-900">
+                                        <Wand2 className="w-3.5 h-3.5" />
+                                        Derive from example (optional) — enter a real window and its measured result, the deductions below get filled in for you
+                                    </div>
+                                    {/* Whole-window measurements, so these are the dimension
+                                        units. Everything is parsed to mm before solving, so the
+                                        derived deductions come out in mm whatever is typed. */}
+                                    <UnitToggle
+                                        unitMode={exampleUnits[i] ?? "mm"}
+                                        onChange={(u) => setExampleUnit(i, u)}
+                                        units={DIMENSION_UNITS}
+                                        compact
+                                        label="Entered in"
+                                    />
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                     <div>
@@ -570,10 +684,13 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                                             </p>
                                             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1">
                                                 {verifyResults[i].map((l, li) => {
+                                                    // Both sides are mm; shown back in the entry unit.
                                                     const ok = Math.abs(l.expected - l.predicted) < 0.01;
+                                                    const u = exampleUnits[i] ?? "mm";
                                                     return (
                                                         <div key={li} className={ok ? "text-green-700" : "text-amber-700"}>
-                                                            {l.label}: {l.predicted}{!ok && ` (typed ${l.expected})`}
+                                                            {l.label}: {formatLength(l.predicted, u)}{UNIT_LABELS[u]}
+                                                            {!ok && ` (typed ${formatLength(l.expected, u)}${UNIT_LABELS[u]})`}
                                                         </div>
                                                     );
                                                 })}
@@ -583,74 +700,51 @@ export default function SectionForm({ initialData, isEdit }: SectionFormProps) {
                                 })()}
                             </div>
 
+                            <div className="flex items-center justify-between pb-1">
+                                <p className="text-xs font-medium text-slate-600">Deductions</p>
+                                {/* These are sub-inch corrections, and the real values are exact
+                                    dora multiples (3.175 = 1 dora, 66.675 = 21, 104.775 = 33) —
+                                    so dora is their natural unit. Stored as mm either way. */}
+                                <UnitToggle
+                                    unitMode={deductionUnits[i] ?? "mm"}
+                                    onChange={(u) => setDeductionUnit(i, u)}
+                                    units={DEDUCTION_UNITS}
+                                    compact
+                                    label="Shown in"
+                                />
+                            </div>
+
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {systemType === "sliding" ? (
                                     <>
-                                        <div>
-                                            <Label className="mb-1 text-xs">Shutter Width Deduction</Label>
-                                            <Input type="number" value={config.shutterWidthDeduction} onChange={e => handleConfigChange(i, "shutterWidthDeduction", Number(e.target.value))} />
-                                        </div>
-                                        <div>
-                                            <Label className="mb-1 text-xs">Height Deduction</Label>
-                                            <Input type="number" value={config.heightDeduction} onChange={e => handleConfigChange(i, "heightDeduction", Number(e.target.value))} />
-                                        </div>
-                                        <div>
-                                            <Label className="mb-1 text-xs">3-Track Width Addition</Label>
-                                            <Input type="number" value={config.threeTrackWidthAddition} onChange={e => handleConfigChange(i, "threeTrackWidthAddition", Number(e.target.value))} />
-                                        </div>
-                                        <div>
-                                            <Label className="mb-1 text-xs">Track Rail Deduction</Label>
-                                            <Input type="number" value={config.trackRailDeduction || 0} onChange={e => handleConfigChange(i, "trackRailDeduction", Number(e.target.value))} />
-                                        </div>
+                                        <DeductionInput label="Shutter Width Deduction" unit={deductionUnits[i] ?? "mm"} value={config.shutterWidthDeduction} onChange={v => handleConfigChange(i, "shutterWidthDeduction", v)} />
+                                        <DeductionInput label="Height Deduction" unit={deductionUnits[i] ?? "mm"} value={config.heightDeduction} onChange={v => handleConfigChange(i, "heightDeduction", v)} />
+                                        <DeductionInput label="3-Track Width Addition" unit={deductionUnits[i] ?? "mm"} value={config.threeTrackWidthAddition} onChange={v => handleConfigChange(i, "threeTrackWidthAddition", v)} />
+                                        <DeductionInput label="Track Rail Deduction" unit={deductionUnits[i] ?? "mm"} value={config.trackRailDeduction || 0} onChange={v => handleConfigChange(i, "trackRailDeduction", v)} />
                                     </>
                                 ) : (
                                     <>
-                                        <div>
-                                            <Label className="mb-1 text-xs">Outer Frame Width Deduction</Label>
-                                            <Input type="number" step="0.001" value={config.outerFrameWidthDeduction || 0} onChange={e => handleConfigChange(i, "outerFrameWidthDeduction", Number(e.target.value))} />
-                                        </div>
-                                        <div>
-                                            <Label className="mb-1 text-xs">Outer Frame Height Deduction</Label>
-                                            <Input type="number" step="0.001" value={config.outerFrameHeightDeduction || 0} onChange={e => handleConfigChange(i, "outerFrameHeightDeduction", Number(e.target.value))} />
-                                        </div>
-                                        <div>
-                                            <Label className="mb-1 text-xs">Mullion Width Deduction</Label>
-                                            <Input type="number" step="0.001" value={config.mullionWidthDeduction || 0} onChange={e => handleConfigChange(i, "mullionWidthDeduction", Number(e.target.value))} />
-                                        </div>
-                                        <div>
-                                            <Label className="mb-1 text-xs">Mullion Length Deduction</Label>
-                                            <Input type="number" step="0.001" value={config.mullionLengthDeduction || 0} onChange={e => handleConfigChange(i, "mullionLengthDeduction", Number(e.target.value))} />
-                                        </div>
+                                        <DeductionInput label="Outer Frame Width Deduction" unit={deductionUnits[i] ?? "mm"} value={config.outerFrameWidthDeduction || 0} onChange={v => handleConfigChange(i, "outerFrameWidthDeduction", v)} />
+                                        <DeductionInput label="Outer Frame Height Deduction" unit={deductionUnits[i] ?? "mm"} value={config.outerFrameHeightDeduction || 0} onChange={v => handleConfigChange(i, "outerFrameHeightDeduction", v)} />
+                                        <DeductionInput label="Mullion Width Deduction" unit={deductionUnits[i] ?? "mm"} value={config.mullionWidthDeduction || 0} onChange={v => handleConfigChange(i, "mullionWidthDeduction", v)} />
+                                        <DeductionInput label="Mullion Length Deduction" unit={deductionUnits[i] ?? "mm"} value={config.mullionLengthDeduction || 0} onChange={v => handleConfigChange(i, "mullionLengthDeduction", v)} />
                                     </>
                                 )}
-                                <div>
-                                    <Label className="mb-1 text-xs">Glass Width Deduction</Label>
-                                    <Input type="number" step="0.001" value={config.glassWidthDeduction} onChange={e => handleConfigChange(i, "glassWidthDeduction", Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label className="mb-1 text-xs">Glass Height Deduction</Label>
-                                    <Input type="number" step="0.001" value={config.glassHeightDeduction} onChange={e => handleConfigChange(i, "glassHeightDeduction", Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label className="mb-1 text-xs">Lock Count (per window)</Label>
-                                    <Input type="number" value={config.lockCount || 0} onChange={e => handleConfigChange(i, "lockCount", Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label className="mb-1 text-xs">Bearing Count (per window)</Label>
-                                    <Input type="number" value={config.bearingCount || 0} onChange={e => handleConfigChange(i, "bearingCount", Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label className="mb-1 text-xs">Corner Count (per window)</Label>
-                                    <Input type="number" value={config.cornerCount || 0} onChange={e => handleConfigChange(i, "cornerCount", Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label className="mb-1 text-xs">PVC Connector Count (per window)</Label>
-                                    <Input type="number" value={config.connectorCount || 0} onChange={e => handleConfigChange(i, "connectorCount", Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label className="mb-1 text-xs">Male-Female Cap Count (per window)</Label>
-                                    <Input type="number" value={config.capCount || 0} onChange={e => handleConfigChange(i, "capCount", Number(e.target.value))} />
-                                </div>
+                                <DeductionInput label="Glass Width Deduction" unit={deductionUnits[i] ?? "mm"} value={config.glassWidthDeduction} onChange={v => handleConfigChange(i, "glassWidthDeduction", v)} />
+                                <DeductionInput label="Glass Height Deduction" unit={deductionUnits[i] ?? "mm"} value={config.glassHeightDeduction} onChange={v => handleConfigChange(i, "glassHeightDeduction", v)} />
+                                {/* One count input per active hardware item. Adding an item in
+                                    /admin/hardware appears here with no code change. */}
+                                {hardwareCatalog.filter(h => h.isActive).map(item => (
+                                    <div key={item.key}>
+                                        <Label className="mb-1 text-xs">{item.label} (per window)</Label>
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            value={config.hardwareCounts?.[item.key] ?? 0}
+                                            onChange={e => handleHardwareCountChange(i, item.key, Number(e.target.value))}
+                                        />
+                                    </div>
+                                ))}
                                 <div className="flex flex-col gap-2 pt-6">
                                     <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
                                         <input type="checkbox" checked={config.separateMosquitoNet || false} onChange={e => handleConfigChange(i, "separateMosquitoNet", e.target.checked)} className="h-4 w-4 rounded border-slate-300" />

@@ -12,6 +12,8 @@ import { useSharePdf } from "@/hooks/useSharePdf";
 import PrintStyles from "@/components/PrintStyles";
 import EditClientDetailsButton from "./EditClientDetailsButton";
 import { Eye, EyeOff } from "lucide-react";
+import { LINE_KEYS } from "@/utils/quotationPricing";
+import { formatLength, UNIT_LABELS, type LengthUnit } from "@/utils/units";
 import type { ItemSpecDetails, PricingData } from "@/utils/quotationPricing";
 import type { CompanySnapshot } from "@/utils/companyConfig";
 import type { QuotationStatus } from "@prisma/client";
@@ -52,6 +54,9 @@ interface Customer {
 }
 
 interface QuotationDocumentProps {
+    /** From the user's rate card, so a quotation prints in the same unit
+     * regardless of which machine opens it. */
+    displayUnit?: LengthUnit;
     quote: {
         id: string;
         quotationNumber: string | null;
@@ -112,8 +117,13 @@ export default function QuotationDocument({
     taxSplit,
     finalTotal,
     customFieldDefinitions,
+    displayUnit = "mm",
 }: QuotationDocumentProps) {
     const [isInternal, setIsInternal] = useState(false);
+
+    // Dimensions are stored in mm and rendered in the user's chosen unit.
+    const unitLabel = UNIT_LABELS[displayUnit];
+    const dim = (mm?: number) => formatLength(mm || 0, displayUnit);
 
     const [logoFailed, setLogoFailed] = useState(false);
 
@@ -275,7 +285,13 @@ export default function QuotationDocument({
                                     const allLines = [...section.profiles, ...section.glass, ...section.accessories];
                                     const includedLines = allLines.filter((line) => line.cost > 0 || line.quantity || line.area);
                                     const glassLine = section.glass[0];
-                                    const meshLine = section.accessories.find((a) => a.area && a.name.toLowerCase().includes("mesh"));
+                                    // Match by key; fall back to the name for lines saved
+                                    // before LineItem.key existed. Sniffing on "has an area"
+                                    // alone broke once Brush also carried one.
+                                    const meshLine = section.accessories.find(
+                                        (a) => a.key === LINE_KEYS.mosquitoMesh
+                                            || (!a.key && a.area && a.name.toLowerCase().includes("mesh"))
+                                    );
                                     return (
                                         <tr key={section.sectionId} className="align-top print:break-inside-avoid">
                                             <td className="p-2 print:p-1 w-44">
@@ -291,6 +307,7 @@ export default function QuotationDocument({
                                                         sections={section.panels}
                                                         widthMm={section.widthMm}
                                                         heightMm={section.heightMm}
+                                                        displayUnit={displayUnit}
                                                     />
                                                 </div>
                                             </td>
@@ -300,7 +317,7 @@ export default function QuotationDocument({
                                                 </div>
                                                 <div className="text-slate-500 text-xs print:text-[10px]">
                                                     {section.configLabel ? `${section.configLabel} — ` : (section.sectionTypeName ? `${section.sectionTypeName} — ` : "")}
-                                                    {((section.widthMm ?? 0) > 0 || (section.heightMm ?? 0) > 0) && `${Math.round(section.widthMm || 0)} × ${Math.round(section.heightMm || 0)} mm — `}
+                                                    {((section.widthMm ?? 0) > 0 || (section.heightMm ?? 0) > 0) && `${dim(section.widthMm)} × ${dim(section.heightMm)} ${unitLabel} — `}
                                                     {section.areaSqFt.toFixed(2)} sq.ft
                                                     {isInternal && typeof section.materialWastagePercent === "number" && ` — ${section.materialWastagePercent.toFixed(1)}% wastage`}
                                                 </div>
@@ -334,7 +351,7 @@ export default function QuotationDocument({
                                                 )}
                                                 {isInternal && (glassLine?.widthMm || meshLine?.area) && (
                                                     <div className="text-slate-400 text-[10px] mt-0.5">
-                                                        {glassLine?.widthMm ? `Glass pane: ${Math.round(glassLine.widthMm)} × ${Math.round(glassLine.heightMm || 0)} mm — ` : ""}
+                                                        {glassLine?.widthMm ? `Glass pane: ${dim(glassLine.widthMm)} × ${dim(glassLine.heightMm)} ${unitLabel} — ` : ""}
                                                         {meshLine?.area ? `Mesh: ${meshLine.area.toFixed(2)} sq.ft` : ""}
                                                     </div>
                                                 )}
@@ -363,12 +380,13 @@ export default function QuotationDocument({
                                                 sections={section.panels}
                                                 widthMm={section.widthMm}
                                                 heightMm={section.heightMm}
+                                                displayUnit={displayUnit}
                                             />
                                             <p className="text-xs font-semibold text-slate-700 mt-2 print:mt-1 text-center">
                                                 {section.name}{section.qty > 1 ? ` × ${section.qty}` : ""}
                                             </p>
                                             {((section.widthMm ?? 0) > 0 || (section.heightMm ?? 0) > 0) && (
-                                                <p className="text-[11px] text-slate-600 font-medium text-center">{Math.round(section.widthMm || 0)} × {Math.round(section.heightMm || 0)} mm</p>
+                                                <p className="text-[11px] text-slate-600 font-medium text-center">{dim(section.widthMm)} × {dim(section.heightMm)} {unitLabel}</p>
                                             )}
                                             {section.areaSqFt > 0 && (
                                                 <p className="text-[11px] text-slate-400 text-center">{section.areaSqFt.toFixed(1)} sq.ft total</p>

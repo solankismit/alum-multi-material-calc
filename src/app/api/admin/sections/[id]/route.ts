@@ -26,11 +26,8 @@ const sectionUpdateSchema = z.object({
         separateMosquitoNet: z.boolean().default(false),
         differentFrameMaterials: z.boolean().default(false),
         hasTrackRail: z.boolean().default(true),
-        lockCount: z.number().default(0),
-        bearingCount: z.number().default(0),
-        cornerCount: z.number().default(0),
-        connectorCount: z.number().default(0),
-        capCount: z.number().default(0),
+        // Keyed by HardwareItem.key — an added catalog item needs no change here.
+        hardwareCounts: z.record(z.string(), z.number().min(0)).default({}),
     })),
 });
 

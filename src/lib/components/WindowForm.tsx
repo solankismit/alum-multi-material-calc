@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Calculator, RotateCcw, Plus, Trash2, X, SlidersHorizontal, ChevronDown } from "lucide-react";
-import { feetToMm, mmToFeet } from "@/utils/formatters";
+import { parseLength, formatLength, UNIT_LABELS, type LengthUnit } from "@/utils/units";
+import UnitToggle from "@/components/ui/UnitToggle";
 import {
   validateSectionDimensions,
   validateDimension,
@@ -51,33 +52,81 @@ function KerfControl({ kerfWidthMm, onChange, fullWidth }: { kerfWidthMm: number
   );
 }
 
-function UnitToggle({ unitMode, onChange, fullWidth }: { unitMode: "mm" | "ft"; onChange: (u: "mm" | "ft") => void; fullWidth?: boolean }) {
+/**
+ * One dimension field (height or width), unit-aware.
+ *
+ * Storage is always mm; this converts on the way in and out. For any unit
+ * other than mm the typed text is held in a raw buffer supplied by the parent
+ * and only cleared on blur — without that, re-deriving the display from the
+ * stored mm on every keystroke fights the user (you cannot type "4.5" if each
+ * keystroke reformats), and it is worse for inch+dora, whose display rounds to
+ * the nearest 3.175mm and so would not even round-trip.
+ */
+function DimensionInput({
+  field,
+  unitMode,
+  valueMm,
+  rawValue,
+  error,
+  onRawChange,
+  onRawClear,
+  onValueChange,
+  onClearError,
+  onValidate,
+}: {
+  field: "height" | "width";
+  unitMode: LengthUnit;
+  valueMm: number | null;
+  rawValue?: string;
+  error?: string;
+  onRawChange: (raw: string) => void;
+  onRawClear: () => void;
+  onValueChange: (mm: number | null) => void;
+  onClearError: () => void;
+  onValidate: () => void;
+}) {
+  const buffered = unitMode !== "mm";
+  const displayed = buffered
+    ? rawValue ?? (valueMm === null ? "" : formatLength(valueMm, unitMode))
+    : valueMm === null
+      ? ""
+      : String(valueMm);
+
   return (
-    <div className={`flex items-center gap-3 bg-surface p-1.5 rounded-lg border border-border shadow-sm ${fullWidth ? "w-full justify-between" : ""}`}>
-      <span className="text-xs font-semibold uppercase text-text-muted px-2">Unit:</span>
-      <div className="flex gap-1" role="radiogroup" aria-label="Measurement unit">
-        {(["mm", "ft"] as const).map((u) => (
-          <Button
-            key={u}
-            type="button"
-            size="sm"
-            role="radio"
-            aria-checked={unitMode === u}
-            variant={unitMode === u ? "primary" : "ghost"}
-            onClick={() => onChange(u)}
-            className={fullWidth ? "h-9 flex-1" : "h-8 px-4"}
-          >
-            {u}
-          </Button>
-        ))}
-      </div>
+    <div>
+      <Input
+        // inch+dora is entered as "47-3", which a number input rejects.
+        type={unitMode === "inDora" ? "text" : "number"}
+        step={unitMode === "ft" ? "0.01" : "0.1"}
+        inputMode={unitMode === "inDora" ? "text" : "decimal"}
+        placeholder={field === "height" ? "Height" : "Width"}
+        value={displayed}
+        onChange={(e) => {
+          const value = e.target.value;
+          if (value === "") {
+            onRawClear();
+            onValueChange(null);
+            onClearError();
+            return;
+          }
+          if (buffered) onRawChange(value);
+          const mm = parseLength(value, unitMode);
+          if (mm !== null) onValueChange(mm);
+          onClearError();
+        }}
+        onBlur={() => {
+          if (buffered) onRawClear();
+          onValidate();
+        }}
+        error={error}
+      />
     </div>
   );
 }
 
 export default function WindowForm({ onCalculate, onReset, initialValues, allSections }: WindowFormProps) {
   const { toast } = useToast();
-  const [unitMode, setUnitMode] = useState<"mm" | "ft">("mm");
+  const [unitMode, setUnitMode] = useState<LengthUnit>("mm");
   const [settingsExpanded, setSettingsExpanded] = useState(false);
 
   const [kerfWidthMm, setKerfWidthMm] = useState<number>(
@@ -140,7 +189,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
     };
   }>({});
 
-  const handleUnitToggle = (newUnit: "mm" | "ft") => {
+  const handleUnitToggle = (newUnit: LengthUnit) => {
     setUnitMode(newUnit);
   };
 
@@ -409,7 +458,7 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
               className="flex items-center gap-1.5 text-xs font-semibold text-text-muted bg-surface px-3 py-1.5 rounded-lg border border-border shadow-sm"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
-              Kerf {kerfWidthMm}mm · {unitMode}
+              Kerf {kerfWidthMm}mm · {UNIT_LABELS[unitMode]}
               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
             </button>
             {settingsExpanded && (
@@ -677,8 +726,8 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                       not just the first (that was a real bug: rows 2+ had no
                       indication of which field or unit they were). */}
                   <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 sm:gap-3 text-xs font-medium text-text-muted px-0.5">
-                    <div>Height ({unitMode})</div>
-                    <div>Width ({unitMode})</div>
+                    <div>Height ({UNIT_LABELS[unitMode]})</div>
+                    <div>Width ({UNIT_LABELS[unitMode]})</div>
                     <div>Qty</div>
                     {section.dimensions.length > 1 && <div className="w-9" aria-hidden="true" />}
                   </div>
@@ -688,193 +737,56 @@ export default function WindowForm({ onCalculate, onReset, initialValues, allSec
                         key={dimension.id}
                         className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 sm:gap-3 items-start animate-in fade-in slide-in-from-top-1 duration-200"
                       >
-                        <div>
-                          <Input
-                            type="number"
-                            step={unitMode === "ft" ? "0.01" : "0.1"}
-                            placeholder="Height"
-                            value={
-                              unitMode === "ft"
-                                ? rawInputs[section.id]?.[dimension.id]?.height ??
-                                (dimension.height === null
-                                  ? ""
-                                  : mmToFeet(dimension.height))
-                                : dimension.height === null
-                                  ? ""
-                                  : dimension.height
+                        {(["height", "width"] as const).map((field) => (
+                          <DimensionInput
+                            key={field}
+                            field={field}
+                            unitMode={unitMode}
+                            valueMm={dimension[field]}
+                            rawValue={rawInputs[section.id]?.[dimension.id]?.[field]}
+                            error={errors[section.id]?.[dimension.id]?.[field]}
+                            onRawChange={(raw) =>
+                              setRawInputs((prev) => ({
+                                ...prev,
+                                [section.id]: {
+                                  ...prev[section.id],
+                                  [dimension.id]: { ...prev[section.id]?.[dimension.id], [field]: raw },
+                                },
+                              }))
                             }
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              // Handler logic reused from original
-                              if (value === "") {
-                                setRawInputs(prev => {
-                                  const next = { ...prev };
-                                  delete next[section.id]?.[dimension.id]?.height;
-                                  return next;
-                                });
-                                updateDimension(section.id, dimension.id, { height: null });
-                                // Clear error
-                                if (errors[section.id]?.[dimension.id]?.height) {
-                                  const nextErrors = { ...errors };
-                                  delete nextErrors[section.id][dimension.id].height;
-                                  setErrors(nextErrors);
+                            onRawClear={() =>
+                              setRawInputs((prev) => {
+                                const next = { ...prev };
+                                delete next[section.id]?.[dimension.id]?.[field];
+                                return next;
+                              })
+                            }
+                            onValueChange={(mm) => updateDimension(section.id, dimension.id, { [field]: mm })}
+                            onClearError={() =>
+                              setErrors((prev) => {
+                                if (!prev[section.id]?.[dimension.id]?.[field]) return prev;
+                                const next = { ...prev };
+                                delete next[section.id][dimension.id][field];
+                                if (Object.keys(next[section.id][dimension.id]).length === 0) {
+                                  delete next[section.id][dimension.id];
                                 }
-                                return;
-                              }
-                              if (unitMode === "ft") {
-                                setRawInputs(prev => ({
-                                  ...prev,
-                                  [section.id]: {
-                                    ...prev[section.id],
-                                    [dimension.id]: {
-                                      ...prev[section.id]?.[dimension.id],
-                                      height: value
-                                    }
-                                  }
-                                }));
-                              }
-                              const num = Number(value);
-                              if (!isNaN(num)) {
-                                updateDimension(section.id, dimension.id, {
-                                  height: unitMode === "ft" ? feetToMm(num) : num
-                                });
-                              }
-                              // Clear error
-                              if (errors[section.id]?.[dimension.id]?.height) {
-                                const nextErrors = { ...errors };
-                                delete nextErrors[section.id][dimension.id].height;
-                                setErrors(nextErrors);
-                              }
-                            }}
-                            onBlur={() => {
-                              if (unitMode === "ft") {
-                                setRawInputs(prev => {
-                                  const next = { ...prev };
-                                  delete next[section.id]?.[dimension.id]?.height;
-                                  return next;
-                                });
-                              }
+                                return next;
+                              })
+                            }
+                            onValidate={() => {
                               const res = validateDimension(dimension, unitMode);
                               if (!res.isValid) {
-                                setErrors(prev => ({
+                                setErrors((prev) => ({
                                   ...prev,
                                   [section.id]: {
                                     ...prev[section.id],
-                                    [dimension.id]: {
-                                      ...prev[section.id]?.[dimension.id],
-                                      ...res.errors
-                                    }
-                                  }
+                                    [dimension.id]: { ...prev[section.id]?.[dimension.id], ...res.errors },
+                                  },
                                 }));
-                              } else {
-                                // Clear errors
-                                setErrors(prev => {
-                                  const next = { ...prev };
-                                  if (next[section.id]?.[dimension.id]) {
-                                    delete next[section.id][dimension.id].height;
-                                    if (Object.keys(next[section.id][dimension.id]).length === 0) {
-                                      delete next[section.id][dimension.id];
-                                    }
-                                  }
-                                  return next;
-                                });
                               }
                             }}
-                            error={errors[section.id]?.[dimension.id]?.height}
                           />
-                        </div>
-
-                        <div>
-                          <Input
-                            type="number"
-                            step={unitMode === "ft" ? "0.01" : "0.1"}
-                            placeholder="Width"
-                            value={
-                              unitMode === "ft"
-                                ? rawInputs[section.id]?.[dimension.id]?.width ??
-                                (dimension.width === null
-                                  ? ""
-                                  : mmToFeet(dimension.width))
-                                : dimension.width === null
-                                  ? ""
-                                  : dimension.width
-                            }
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (value === "") {
-                                setRawInputs(prev => {
-                                  const next = { ...prev };
-                                  delete next[section.id]?.[dimension.id]?.width;
-                                  return next;
-                                });
-                                updateDimension(section.id, dimension.id, { width: null });
-                                if (errors[section.id]?.[dimension.id]?.width) {
-                                  const nextErrors = { ...errors };
-                                  delete nextErrors[section.id][dimension.id].width;
-                                  setErrors(nextErrors);
-                                }
-                                return;
-                              }
-                              if (unitMode === "ft") {
-                                setRawInputs(prev => ({
-                                  ...prev,
-                                  [section.id]: {
-                                    ...prev[section.id],
-                                    [dimension.id]: {
-                                      ...prev[section.id]?.[dimension.id],
-                                      width: value
-                                    }
-                                  }
-                                }));
-                              }
-                              const num = Number(value);
-                              if (!isNaN(num)) {
-                                updateDimension(section.id, dimension.id, {
-                                  width: unitMode === "ft" ? feetToMm(num) : num
-                                });
-                              }
-                              if (errors[section.id]?.[dimension.id]?.width) {
-                                const nextErrors = { ...errors };
-                                delete nextErrors[section.id][dimension.id].width;
-                                setErrors(nextErrors);
-                              }
-                            }}
-                            onBlur={() => {
-                              if (unitMode === "ft") {
-                                setRawInputs(prev => {
-                                  const next = { ...prev };
-                                  delete next[section.id]?.[dimension.id]?.width;
-                                  return next;
-                                });
-                              }
-                              const res = validateDimension(dimension, unitMode);
-                              if (!res.isValid) {
-                                setErrors(prev => ({
-                                  ...prev,
-                                  [section.id]: {
-                                    ...prev[section.id],
-                                    [dimension.id]: {
-                                      ...prev[section.id]?.[dimension.id],
-                                      ...res.errors
-                                    }
-                                  }
-                                }));
-                              } else {
-                                setErrors(prev => {
-                                  const next = { ...prev };
-                                  if (next[section.id]?.[dimension.id]) {
-                                    delete next[section.id][dimension.id].width;
-                                    if (Object.keys(next[section.id][dimension.id]).length === 0) {
-                                      delete next[section.id][dimension.id];
-                                    }
-                                  }
-                                  return next;
-                                });
-                              }
-                            }}
-                            error={errors[section.id]?.[dimension.id]?.width}
-                          />
-                        </div>
+                        ))}
 
                         <div>
                           <Input

@@ -12,11 +12,19 @@ export default async function RateCardPage() {
     if (!session?.userId) return redirect("/login");
 
     const rateCard = await db.rateCard.findUnique({ where: { userId: session.userId as string } });
+    // Global/admin-managed, so no user filter. Inactive items are included so a
+    // retired item the user still has a rate for stays visible on this page.
+    const hardwareCatalog = await db.hardwareItem.findMany({ orderBy: { sortOrder: "asc" } });
 
     const initial = {
+        profileRateBasis: (rateCard?.profileRateBasis as "weight" | "length") ?? "weight",
         profileRatePerFt: rateCard?.profileRatePerFt ?? 0,
         profileRates: (rateCard?.profileRates as Record<string, number>) ?? {},
         profileWeightPerFt: (rateCard?.profileWeightPerFt as Record<string, number>) ?? {},
+        profileRatesPerKg: (rateCard?.profileRatesPerKg as Record<string, number>) ?? {},
+        profileGroupCategories: rateCard?.profileGroupCategories ?? ["frame", "shutter", "interlock"],
+        profileGroupLabel: rateCard?.profileGroupLabel ?? "Material",
+        profileGroupRatePerKg: rateCard?.profileGroupRatePerKg ?? 0,
         glassRates: (rateCard?.glassRates as Record<string, number>) ?? {},
         hardwareRates: (rateCard?.hardwareRates as unknown as HardwareRateMap) ?? {},
         rubberRatePerSqft: rateCard?.rubberRatePerSqft ?? 0,
@@ -32,6 +40,7 @@ export default async function RateCardPage() {
         taxRateDefault: rateCard?.taxRateDefault ?? 0,
         termsText: rateCard?.termsText ?? "",
         hsnCodes: (rateCard?.hsnCodes as Record<string, string>) ?? {},
+        displayLengthUnit: (rateCard?.displayLengthUnit as "mm" | "ft" | "inDora") ?? "mm",
     };
 
     return (
@@ -46,7 +55,7 @@ export default async function RateCardPage() {
                 </Link>
             </div>
 
-            <RateCardForm initial={initial} />
+            <RateCardForm initial={initial} hardwareCatalog={hardwareCatalog} />
         </PageContainer>
     );
 }

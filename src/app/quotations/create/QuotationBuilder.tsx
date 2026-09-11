@@ -17,19 +17,22 @@ import { calculateLaborCost, type LaborMode } from "@/utils/laborCost";
 import {
     findHardwareRateByLabel,
     PLEATED_MOSQUITO_NET_LABEL,
-    LOCK_LABEL,
-    BEARING_LABEL,
-    CORNER_LABEL,
-    PVC_CONNECTOR_LABEL,
-    MALE_FEMALE_CAP_LABEL,
     type HardwareRateMap,
 } from "@/utils/hardwareRates";
+import {
+    indexHardwareByKey,
+    normalizeHardwareCounts,
+    resolveHardwareRate,
+    type HardwareItemData,
+} from "@/utils/hardwareCatalog";
 import {
     computeTotals,
     sumLaborItems,
     mergeItemDetails,
     DEFAULT_TAX_TYPE,
+    LINE_KEYS,
     type LineItem,
+    type LineItemComponent,
     type SectionPricing,
     type LaborItem,
     type TaxType,
@@ -38,11 +41,19 @@ import {
     type ItemPosition,
     type ItemSpecDetails,
 } from "@/utils/quotationPricing";
-import type { MaterialCategory, WindowInput } from "@/types";
+import {
+    priceProfiles,
+    priceCoating,
+    type ProfileRateBasis,
+    type ProfileRateConfig,
+} from "@/utils/profilePricing";
+import type { MaterialCategory, WindowInput, SectionAccessories } from "@/types";
 import WindowSchematic from "@/components/WindowSchematic";
 import { useToast } from "@/components/ui/Toast";
 import ManualSectionForm, { type ManualSection, type ManualHardwareItem } from "./ManualSectionForm";
 import DynamicFieldsEditor from "@/components/DynamicFieldsEditor";
+import UnitToggle from "@/components/ui/UnitToggle";
+import { type LengthUnit } from "@/utils/units";
 import type { CustomFieldDefinitionData } from "@/utils/customFields";
 
 export interface RateMap {
@@ -50,9 +61,14 @@ export interface RateMap {
 }
 
 export interface RateCardData {
+    profileRateBasis: ProfileRateBasis;
     profileRatePerFt: number;
     profileRates: RateMap;
     profileWeightPerFt: RateMap;
+    profileRatesPerKg: RateMap;
+    profileGroupCategories: string[];
+    profileGroupLabel: string;
+    profileGroupRatePerKg: number;
     glassRates: RateMap;
     hardwareRates: HardwareRateMap;
     rubberRatePerSqft: number;
@@ -89,13 +105,17 @@ interface HardwareDraftItem {
     rate: number;
 }
 
+/** A structurally looser view of the shared `SectionResult` — worksheets are
+ * persisted JSON, so `category` may be absent on materials saved before it
+ * existed. `accessories` deliberately reuses the shared `SectionAccessories`
+ * rather than redeclaring it. */
 interface SectionResult {
     sectionId: string;
     sectionName: string;
     sectionTypeName?: string;
     materials: Array<{ category?: MaterialCategory; component: string; stockBreakdown: { stockName: string; stockLength: number; stocksNeeded: number } }>;
     glassInfo: Array<{ glassSize: { totalArea: number; width?: number; height?: number } }>;
-    accessories: { mosquitoCChannel: number; trackCap: number; lock: number; bearing: number; corner: number; connector: number; cap: number };
+    accessories: SectionAccessories;
     summary?: { wastagePercent?: number; totalMosquitoArea?: number };
 }
 
@@ -108,17 +128,39 @@ interface SectionTypeRates {
     sectionTypeKey: string;
     sectionTypeName: string;
     usedBySectionNames: string[];
+    /** How profiles are priced for this system — ₹/kg (default) or ₹/ft. */
+    profileRateBasis: ProfileRateBasis;
+    /** category -> ₹/ft, used when basis is "length". */
     profileRates: RateMap;
+    /** category -> kg per running ft. Drives coating cost always, and profile
+     * cost too when basis is "weight". */
     profileWeightRates: RateMap;
+    /** category -> ₹/kg for categories outside the material group. */
+    profileRatesPerKg: RateMap;
+    /** Categories bought as one commodity, priced at one ₹/kg and shown as a
+     * single combined line. */
+    profileGroupCategories: string[];
+    profileGroupLabel: string;
+    profileGroupRatePerKg: number;
     glassType: string;
     glassRate: number;
-    meshRate: number;
-    trackCapRate: number;
-    lockRate: number;
-    bearingRate: number;
-    cornerRate: number;
-    connectorRate: number;
-    capRate: number;
+    /** ₹ per unit, keyed by HardwareItem.key — replaced the fixed
+     * meshRate/trackCapRate/lockRate/… fields so a new catalog item needs no
+     * code change here. */
+    hardwareRates: RateMap;
+}
+
+/** Adapts a section-type's rate bundle to the shared pricing helper. */
+function buildProfileRateConfig(typeRates: SectionTypeRates | undefined): ProfileRateConfig {
+    return {
+        basis: typeRates?.profileRateBasis ?? "weight",
+        ratesPerFt: typeRates?.profileRates ?? {},
+        weightPerFt: typeRates?.profileWeightRates ?? {},
+        ratesPerKg: typeRates?.profileRatesPerKg ?? {},
+        groupCategories: typeRates?.profileGroupCategories ?? [],
+        groupLabel: typeRates?.profileGroupLabel ?? "Material",
+        groupRatePerKg: typeRates?.profileGroupRatePerKg ?? 0,
+    };
 }
 
 type DiscountType = "percent" | "flat";
@@ -127,6 +169,11 @@ type DiscountType = "percent" | "flat";
 function getSectionTypeKey(section: { sectionId: string; sectionTypeName?: string }, inputSectionTypeId?: string): string {
     return inputSectionTypeId || section.sectionTypeName || section.sectionId;
 }
+
+const PROFILE_BASIS_OPTIONS: { value: ProfileRateBasis; label: string }[] = [
+    { value: "weight", label: "by weight (₹/kg)" },
+    { value: "length", label: "by length (₹/ft)" },
+];
 
 const LABOR_MODE_LABELS: Record<LaborMode, string> = {
     flat: "Flat Amount (₹)",
@@ -166,6 +213,7 @@ function buildInitialSectionTypeRates(
     input: WindowInput | null,
     results: SectionResult[],
     card: RateCardData | null,
+    hardwareCatalog: HardwareItemData[],
     existingPricing?: PricingData | null
 ): Record<string, SectionTypeRates> {
     const firstGlassType = card ? Object.keys(card.glassRates)[0] : undefined;
@@ -182,29 +230,40 @@ function buildInitialSectionTypeRates(
         if (!typeRates[key]) {
             const saved = findSaved(typeName);
             const savedGlass = saved?.glass?.[0];
-            const savedMesh = saved?.accessories?.find((a) => a.area !== undefined && a.name.toLowerCase().includes("mesh"));
-            const savedTrackCap = saved?.accessories?.find((a) => a.name === "Track Cap");
-            const savedLock = saved?.accessories?.find((a) => a.name === LOCK_LABEL);
-            const savedBearing = saved?.accessories?.find((a) => a.name === BEARING_LABEL);
-            const savedCorner = saved?.accessories?.find((a) => a.name === CORNER_LABEL);
-            const savedConnector = saved?.accessories?.find((a) => a.name === PVC_CONNECTOR_LABEL);
-            const savedCap = saved?.accessories?.find((a) => a.name === MALE_FEMALE_CAP_LABEL);
+
+            // One rate per catalog item. Recover a previously-saved rate by
+            // key; fall back to matching the saved line's NAME for quotations
+            // written before LineItem.key existed, then to the rate card.
+            const hardwareRates: RateMap = {};
+            hardwareCatalog.forEach((item) => {
+                const savedLine = saved?.accessories?.find(
+                    (a) => a.key === item.key || (!a.key && a.name === item.label)
+                );
+                hardwareRates[item.key] = savedLine?.rate ?? resolveHardwareRate(card?.hardwareRates, item);
+            });
+
+            // The saved combined-material line, if this quotation was written
+            // with weight pricing — recovers the group rate and, via the line's
+            // unit, which basis was in force.
+            const savedGroup = saved?.profiles?.find((p) => p.key === LINE_KEYS.profileGroup);
+            const savedBasis: ProfileRateBasis | undefined = saved?.profiles?.length
+                ? (saved.profiles.some((p) => p.unit === "kg" && p.key !== LINE_KEYS.coating) ? "weight" : "length")
+                : undefined;
 
             typeRates[key] = {
                 sectionTypeKey: key,
                 sectionTypeName: typeName,
                 usedBySectionNames: [],
+                profileRateBasis: savedBasis ?? card?.profileRateBasis ?? "weight",
                 profileRates: {},
                 profileWeightRates: {},
+                profileRatesPerKg: {},
+                profileGroupCategories: card?.profileGroupCategories ?? ["frame", "shutter", "interlock"],
+                profileGroupLabel: savedGroup?.name || card?.profileGroupLabel || "Material",
+                profileGroupRatePerKg: savedGroup?.rate ?? card?.profileGroupRatePerKg ?? 0,
                 glassType: savedGlass?.name || firstGlassType || "",
                 glassRate: savedGlass?.rate ?? (firstGlassType && card ? card.glassRates[firstGlassType] : 0),
-                meshRate: savedMesh?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, "Mosquito Mesh") ?? findHardwareRateByLabel(card?.hardwareRates, "C-Channel") ?? 0),
-                trackCapRate: savedTrackCap?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, "Track Cap") ?? 0),
-                lockRate: savedLock?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, LOCK_LABEL) ?? 0),
-                bearingRate: savedBearing?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, BEARING_LABEL) ?? 0),
-                cornerRate: savedCorner?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, CORNER_LABEL) ?? 0),
-                connectorRate: savedConnector?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, PVC_CONNECTOR_LABEL) ?? 0),
-                capRate: savedCap?.rate ?? (findHardwareRateByLabel(card?.hardwareRates, MALE_FEMALE_CAP_LABEL) ?? 0),
+                hardwareRates,
             };
         }
         typeRates[key].usedBySectionNames.push(section.sectionName);
@@ -212,13 +271,21 @@ function buildInitialSectionTypeRates(
         const saved = findSaved(typeName);
         section.materials.forEach((mat) => {
             const category = resolveMaterialCategory(mat);
+            const label = MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category;
+            // Lines now carry the category as their key; fall back to the
+            // display label for quotations saved before that was true.
+            const savedLine = saved?.profiles?.find((p) => p.key === category || (!p.key && p.name === label));
+
             if (typeRates[key].profileRates[category] === undefined) {
-                const label = MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category;
-                const savedLine = saved?.profiles?.find((p) => p.name === label);
-                typeRates[key].profileRates[category] = savedLine?.rate ?? (card?.profileRates?.[category] ?? card?.profileRatePerFt ?? 0);
+                typeRates[key].profileRates[category] = (savedLine?.unit === "ft" ? savedLine.rate : undefined)
+                    ?? card?.profileRates?.[category] ?? card?.profileRatePerFt ?? 0;
             }
             if (typeRates[key].profileWeightRates[category] === undefined) {
                 typeRates[key].profileWeightRates[category] = card?.profileWeightPerFt?.[category] ?? 0;
+            }
+            if (typeRates[key].profileRatesPerKg[category] === undefined) {
+                typeRates[key].profileRatesPerKg[category] = (savedLine?.unit === "kg" ? savedLine.rate : undefined)
+                    ?? card?.profileRatesPerKg?.[category] ?? card?.profileGroupRatePerKg ?? 0;
             }
         });
     });
@@ -305,9 +372,13 @@ export interface QuotationBuilderProps {
      * client-side in this component, so the definitions need to reach the
      * client bundle, not stop at the server boundary. */
     customFieldDefinitions: CustomFieldDefinitionData[];
+    /** The admin-managed hardware catalog, fetched server-side. Drives both
+     * the per-item rate inputs and the hardware line items — adding an item in
+     * /admin/hardware surfaces here with no code change. */
+    hardwareCatalog: HardwareItemData[];
 }
 
-export default function QuotationBuilder({ worksheetId, initialRateCard, initialWorksheet, initialQuotation, customFieldDefinitions }: QuotationBuilderProps) {
+export default function QuotationBuilder({ worksheetId, initialRateCard, initialWorksheet, initialQuotation, customFieldDefinitions, hardwareCatalog }: QuotationBuilderProps) {
     const router = useRouter();
     const { toast } = useToast();
 
@@ -326,8 +397,16 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
     // identical systems share one rate bundle automatically, different
     // systems get independent ones.
     const [sectionTypeRates, setSectionTypeRates] = useState<Record<string, SectionTypeRates>>(
-        buildInitialSectionTypeRates(initialWorksheet?.input ?? null, initialResults, initialRateCard, seedPricing)
+        buildInitialSectionTypeRates(initialWorksheet?.input ?? null, initialResults, initialRateCard, hardwareCatalog, seedPricing)
     );
+
+    /** Active catalog items in display order, plus a key index — used when
+     * building hardware line items and rendering the per-item rate inputs. */
+    const activeHardware = useMemo(
+        () => hardwareCatalog.filter((item) => item.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
+        [hardwareCatalog]
+    );
+    const hardwareByKey = useMemo(() => indexHardwareByKey(hardwareCatalog), [hardwareCatalog]);
 
     // Details (color, glass, mesh, handle, locking, hinge, notes) shared by every
     // section using the same system — same grouping key as sectionTypeRates, so
@@ -341,6 +420,8 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         buildInitialItemPositions(seedPricing)
     );
     const [itemDetailOverrides, setItemDetailOverrides] = useState<Record<string, ItemSpecDetails>>({});
+    /** Which sidebar cost rows have their component breakdown expanded. */
+    const [expandedCostLines, setExpandedCostLines] = useState<Record<string, boolean>>({});
     const [expandedDetailItems, setExpandedDetailItems] = useState<Record<string, boolean>>({});
     // Passed to mergeItemDetails() so a since-disabled field's saved value
     // is still preserved (not just the currently-active fields) — see the
@@ -356,28 +437,52 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
     const [manualSections, setManualSections] = useState<ManualSection[]>(
         !worksheetId ? buildInitialManualSections(seedPricing, initialRateCard) : []
     );
-    const [manualUnitMode, setManualUnitMode] = useState<"mm" | "ft">("mm");
+    const [manualUnitMode, setManualUnitMode] = useState<LengthUnit>("mm");
 
     // Extra hardware/mesh line items added per section (worksheet sections),
     // on top of the auto-computed mesh/track-cap accessories, or per manual
     // section (where it's the section's only accessory source). Keyed by
     // section id, shared across both modes since ids never collide.
-    const [extraHardware, setExtraHardware] = useState<Record<string, HardwareDraftItem[]>>(
-        !worksheetId && seedPricing?.sections
-            ? seedPricing.sections.reduce<Record<string, HardwareDraftItem[]>>((acc, s) => {
-                if (s.accessories.length > 0) {
-                    acc[s.sectionId] = s.accessories.map((a) => ({
-                        id: crypto.randomUUID(),
-                        name: a.name,
-                        quantity: a.quantity || 0,
-                        unit: a.unit,
-                        rate: a.rate,
-                    }));
-                }
-                return acc;
-            }, {})
-            : {}
-    );
+    //
+    // Seeded in BOTH modes. It used to be worksheet-mode-only, which silently
+    // dropped every manually-added hardware row when re-editing a
+    // worksheet-backed quotation: the auto-computed accessories regenerate
+    // from the section config, the manual rows did not, and re-saving lost
+    // them. In worksheet mode we keep only the rows the user actually typed,
+    // identified by having no `key` — every auto-generated line carries one.
+    // (Lines saved before `key` existed are matched by name against the
+    // catalog/derived labels so they are not resurrected as duplicates.)
+    const [extraHardware, setExtraHardware] = useState<Record<string, HardwareDraftItem[]>>(() => {
+        if (!seedPricing?.sections) return {};
+
+        const generatedNames = new Set<string>([
+            ...hardwareCatalog.map((h) => h.label),
+            "Track Cap",
+            "Brush",
+            "Mosquito Mesh / C-Channel",
+        ]);
+        const isUserEntered = (line: { key?: string; name: string }) =>
+            !worksheetId
+                // Manual sections have no auto-computed hardware beyond Brush.
+                ? line.key !== LINE_KEYS.brush
+                : !line.key
+                    && !generatedNames.has(line.name)
+                    && !line.name.startsWith("Mosquito Mesh");
+
+        return seedPricing.sections.reduce<Record<string, HardwareDraftItem[]>>((acc, s) => {
+            const rows = s.accessories.filter(isUserEntered);
+            if (rows.length > 0) {
+                acc[s.sectionId] = rows.map((a) => ({
+                    id: crypto.randomUUID(),
+                    name: a.name,
+                    quantity: a.quantity || 0,
+                    unit: a.unit,
+                    rate: a.rate,
+                }));
+            }
+            return acc;
+        }, {});
+    });
 
     // Overheads — seeded from the saved quotation when editing, else from
     // rate card defaults. Freeform quotations have no material-cost/area
@@ -519,38 +624,20 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
             const typeKey = getSectionTypeKey(section, inputSection?.sectionTypeId);
             const typeRates = sectionTypeRates[typeKey];
 
+            // Bars-purchased footage per category (whole bars including
+            // offcut scrap) — the quantity that is actually paid for.
             const sectionProfileQty: RateMap = {};
             section.materials.forEach((mat) => {
                 const category = resolveMaterialCategory(mat);
                 const ft = (mat.stockBreakdown.stocksNeeded * mat.stockBreakdown.stockLength) / 304.8;
                 sectionProfileQty[category] = (sectionProfileQty[category] || 0) + ft;
             });
-            const profiles: LineItem[] = Object.entries(sectionProfileQty).map(([category, qtyFt]) => {
-                const rate = typeRates?.profileRates[category] || 0;
-                return {
-                    name: MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category,
-                    quantity: qtyFt,
-                    unit: "ft",
-                    rate,
-                    cost: qtyFt * rate,
-                };
-            });
 
-            const profileWeightKg = Object.entries(sectionProfileQty).reduce(
-                (sum, [category, qtyFt]) => sum + qtyFt * (typeRates?.profileWeightRates[category] || 0),
-                0
-            );
-            const coatedWeightKg = profileWeightKg * (1 + coatingWastagePercent / 100);
-            const coatingRate = coatingRatePerKg || 0;
-            if (coatedWeightKg > 0) {
-                profiles.push({
-                    name: "Coating",
-                    quantity: coatedWeightKg,
-                    unit: "kg",
-                    rate: coatingRate,
-                    cost: coatedWeightKg * coatingRate,
-                });
-            }
+            const priced = priceProfiles(sectionProfileQty, buildProfileRateConfig(typeRates));
+            const profiles: LineItem[] = [...priced.lines];
+
+            const coatingLine = priceCoating(priced.totalWeightKg, coatingWastagePercent, coatingRatePerKg || 0);
+            if (coatingLine) profiles.push(coatingLine);
 
             const sectionGlassAreaSqFt = section.glassInfo.reduce((sum, g) => sum + g.glassSize.totalArea, 0) / AREA_SQMM_PER_SQFT;
             const firstGlassSize = section.glassInfo[0]?.glassSize;
@@ -558,6 +645,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
             const glass: LineItem[] = sectionGlassAreaSqFt > 0
                 ? [{
                     name: typeRates?.glassType || "Glass",
+                    key: LINE_KEYS.glass,
                     area: sectionGlassAreaSqFt,
                     unit: "sqft",
                     rate: typeRates?.glassRate || 0,
@@ -566,6 +654,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                     heightMm: firstGlassSize?.height,
                 }, {
                     name: "Rubber",
+                    key: LINE_KEYS.rubber,
                     area: sectionGlassAreaSqFt,
                     unit: "sqft",
                     rate: rubberRate,
@@ -573,28 +662,48 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 }]
                 : [];
 
-            const meshRate = typeRates?.meshRate || 0;
-            const trackCapRate = typeRates?.trackCapRate || 0;
             const brushRate = rateCard?.brushRatePerSqft || 0;
-            const meshName = inputSection?.mosquitoMeshGrade
-                ? `Mosquito Mesh (${inputSection.mosquitoMeshGrade})`
-                : "Mosquito Mesh / C-Channel";
             const meshAreaSqFt = (section.summary?.totalMosquitoArea || 0) / AREA_SQMM_PER_SQFT;
+            const rateFor = (key: string) => typeRates?.hardwareRates?.[key] || 0;
             const extraHardwareItems: LineItem[] = (extraHardware[section.sectionId] || [])
                 .filter((item) => item.name.trim())
                 .map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit, rate: item.rate, cost: item.quantity * item.rate }));
 
+            // Mesh and track cap are derived from the track type/configuration
+            // rather than per-window counts, so they stay explicit. Everything
+            // else comes straight off the catalog-keyed count map.
+            const meshName = inputSection?.mosquitoMeshGrade
+                ? `Mosquito Mesh (${inputSection.mosquitoMeshGrade})`
+                : "Mosquito Mesh / C-Channel";
+            const meshRate = rateFor(LINE_KEYS.mosquitoMesh);
+            const trackCapRate = rateFor(LINE_KEYS.trackCap);
+
+            const countedHardware: LineItem[] = Object.entries(
+                normalizeHardwareCounts(section.accessories.hardware)
+            )
+                .map(([key, quantity]) => {
+                    const item = hardwareByKey[key];
+                    const rate = rateFor(key);
+                    return {
+                        name: item?.label ?? key,
+                        key,
+                        quantity,
+                        unit: item?.unit ?? "nos",
+                        rate,
+                        cost: quantity * rate,
+                    };
+                })
+                // Stable, catalog-ordered output so line order doesn't churn
+                // between renders as the count map's key order varies.
+                .sort((a, b) => (hardwareByKey[a.key]?.sortOrder ?? 999) - (hardwareByKey[b.key]?.sortOrder ?? 999));
+
             const accessories: LineItem[] = [
                 ...(section.accessories.mosquitoCChannel > 0
-                    ? [{ name: meshName, quantity: section.accessories.mosquitoCChannel, unit: "nos", area: meshAreaSqFt || undefined, rate: meshRate, cost: section.accessories.mosquitoCChannel * meshRate }]
+                    ? [{ name: meshName, key: LINE_KEYS.mosquitoMesh, quantity: section.accessories.mosquitoCChannel, unit: "nos", area: meshAreaSqFt || undefined, rate: meshRate, cost: section.accessories.mosquitoCChannel * meshRate }]
                     : []),
-                ...(section.accessories.trackCap > 0 ? [{ name: "Track Cap", quantity: section.accessories.trackCap, unit: "nos", rate: trackCapRate, cost: section.accessories.trackCap * trackCapRate }] : []),
-                ...(section.accessories.lock > 0 ? [{ name: LOCK_LABEL, quantity: section.accessories.lock, unit: "nos", rate: typeRates?.lockRate || 0, cost: section.accessories.lock * (typeRates?.lockRate || 0) }] : []),
-                ...(section.accessories.bearing > 0 ? [{ name: BEARING_LABEL, quantity: section.accessories.bearing, unit: "nos", rate: typeRates?.bearingRate || 0, cost: section.accessories.bearing * (typeRates?.bearingRate || 0) }] : []),
-                ...(section.accessories.corner > 0 ? [{ name: CORNER_LABEL, quantity: section.accessories.corner, unit: "nos", rate: typeRates?.cornerRate || 0, cost: section.accessories.corner * (typeRates?.cornerRate || 0) }] : []),
-                ...(section.accessories.connector > 0 ? [{ name: PVC_CONNECTOR_LABEL, quantity: section.accessories.connector, unit: "nos", rate: typeRates?.connectorRate || 0, cost: section.accessories.connector * (typeRates?.connectorRate || 0) }] : []),
-                ...(section.accessories.cap > 0 ? [{ name: MALE_FEMALE_CAP_LABEL, quantity: section.accessories.cap, unit: "nos", rate: typeRates?.capRate || 0, cost: section.accessories.cap * (typeRates?.capRate || 0) }] : []),
-                ...(areaSqFt > 0 ? [{ name: "Brush", area: areaSqFt, unit: "sqft", rate: brushRate, cost: areaSqFt * brushRate }] : []),
+                ...(section.accessories.trackCap > 0 ? [{ name: "Track Cap", key: LINE_KEYS.trackCap, quantity: section.accessories.trackCap, unit: "nos", rate: trackCapRate, cost: section.accessories.trackCap * trackCapRate }] : []),
+                ...countedHardware,
+                ...(areaSqFt > 0 ? [{ name: "Brush", key: LINE_KEYS.brush, area: areaSqFt, unit: "sqft", rate: brushRate, cost: areaSqFt * brushRate }] : []),
                 ...extraHardwareItems,
             ];
 
@@ -638,13 +747,14 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                 : 0;
 
             const profiles: LineItem[] = section.frameRatePerSqft > 0 && areaSqFt > 0
-                ? [{ name: "Frame & Fabrication", area: areaSqFt, unit: "sqft", rate: section.frameRatePerSqft, cost: areaSqFt * section.frameRatePerSqft }]
+                ? [{ name: "Frame & Fabrication", key: LINE_KEYS.frameFabrication, area: areaSqFt, unit: "sqft", rate: section.frameRatePerSqft, cost: areaSqFt * section.frameRatePerSqft }]
                 : [];
 
             const rubberRate = rateCard?.rubberRatePerSqft || 0;
             const glass: LineItem[] = areaSqFt > 0
                 ? [{
                     name: section.glassType || "Glass",
+                    key: LINE_KEYS.glass,
                     area: areaSqFt,
                     unit: "sqft",
                     rate: section.glassRate,
@@ -653,6 +763,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                     heightMm: section.height ?? undefined,
                 }, {
                     name: "Rubber",
+                    key: LINE_KEYS.rubber,
                     area: areaSqFt,
                     unit: "sqft",
                     rate: rubberRate,
@@ -662,7 +773,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
 
             const brushRate = rateCard?.brushRatePerSqft || 0;
             const accessories: LineItem[] = [
-                ...(areaSqFt > 0 ? [{ name: "Brush", area: areaSqFt, unit: "sqft", rate: brushRate, cost: areaSqFt * brushRate }] : []),
+                ...(areaSqFt > 0 ? [{ name: "Brush", key: LINE_KEYS.brush, area: areaSqFt, unit: "sqft", rate: brushRate, cost: areaSqFt * brushRate }] : []),
                 ...(extraHardware[section.id] || [])
                     .filter((item) => item.name.trim())
                     .map((item) => ({ name: item.name, quantity: item.quantity, unit: item.unit, rate: item.rate, cost: item.quantity * item.rate })),
@@ -709,22 +820,61 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
         const trackCapCount = sectionResults.reduce((sum, s) => sum + s.accessories.trackCap, 0);
         const totalAccessoryCost = sectionBreakdowns.reduce((sum, s) => sum + s.accessories.reduce((ss, a) => ss + a.cost, 0), 0);
 
-        const breakdownByName = new Map<string, { cost: number; amount: number; unit: string }>();
+        // Aggregate every line across sections into one row per distinct item.
+        // Grouped by `key` where there is one (so all glass lines total
+        // together even though each is named after its glass type), falling
+        // back to the display name for user-typed rows and pre-key data.
+        type BreakdownRow = {
+            name: string;
+            cost: number;
+            amount: number;
+            unit: string;
+            /** Undefined when contributing lines disagree — see below. */
+            rate: number | undefined;
+            components?: LineItemComponent[];
+        };
+        const breakdown = new Map<string, BreakdownRow>();
         sectionBreakdowns.forEach((s) => {
             [...s.profiles, ...s.glass, ...s.accessories].forEach((line) => {
-                const existing = breakdownByName.get(line.name) || { cost: 0, amount: 0, unit: line.unit };
-                breakdownByName.set(line.name, {
-                    cost: existing.cost + line.cost,
-                    amount: existing.amount + (line.quantity ?? line.area ?? 0),
-                    unit: line.unit,
-                });
+                const groupKey = line.key ?? line.name;
+                const existing = breakdown.get(groupKey);
+                const amount = line.quantity ?? line.area ?? 0;
+
+                if (!existing) {
+                    breakdown.set(groupKey, {
+                        name: line.name,
+                        cost: line.cost,
+                        amount,
+                        unit: line.unit,
+                        rate: line.rate,
+                        components: line.components ? [...line.components] : undefined,
+                    });
+                    return;
+                }
+
+                existing.cost += line.cost;
+                existing.amount += amount;
+                // Two section types can price the same item differently. Rather
+                // than show a misleading average, drop the rate entirely and
+                // let the amount and total speak for themselves.
+                if (existing.rate !== line.rate) existing.rate = undefined;
+
+                if (line.components) {
+                    existing.components = existing.components ?? [];
+                    line.components.forEach((component) => {
+                        const match = existing.components!.find(
+                            (c) => (c.key ?? c.name) === (component.key ?? component.name)
+                        );
+                        if (match) match.quantity += component.quantity;
+                        else existing.components!.push({ ...component });
+                    });
+                }
             });
         });
-        const costBreakdownByName = Array.from(breakdownByName.entries())
-            .map(([name, { cost, amount, unit }]) => ({ name, cost, amount, unit }))
+        const costBreakdownByName = Array.from(breakdown.values())
             .filter((line) => line.cost > 0)
             .sort((a, b) => b.cost - a.cost);
-        const totalCoatingKg = breakdownByName.get("Coating")?.amount || 0;
+        const totalCoatingKg = breakdown.get(LINE_KEYS.coating)?.amount || 0;
         // Derived from the section breakdowns rather than the original worksheet
         // input, so it's correct for manual (no-worksheet) quotations too — those
         // have no `windowInput`, only `manualSections`, which already feed into
@@ -763,6 +913,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
             totalAccessoryCost,
             costBreakdownByName,
             totalCoatingKg,
+            materialCost,
             laborCost,
             ...computed,
         };
@@ -1105,7 +1256,7 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                 <div className="bg-surface p-6 rounded-xl border border-border shadow-sm space-y-3">
                                     <div className="border-b pb-2">
                                         <h2 className="font-semibold text-lg text-text">Coating</h2>
-                                        <p className="text-xs text-text-muted mt-1">Applied to every system's profile weight (kg/ft, set per system below).</p>
+                                        <p className="text-xs text-text-muted mt-1">Applied to every system&apos;s profile weight (kg/ft, set per system below).</p>
                                     </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-md">
                                         <div>
@@ -1144,126 +1295,134 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                                 <div className="text-xs text-text-muted">Used by: {typeRate.usedBySectionNames.join(", ")}</div>
                                             </div>
 
-                                            {/* Frame/Shutter/Interlock/Track Rail/Mullion + hardware, all in one dense grid */}
+                                            {/* Profile pricing for this system. Which inputs appear
+                                                follows the basis: ₹/kg (with a single combined rate
+                                                for the material group) or the older ₹/ft per member. */}
+                                            <div className="flex items-center gap-2 pb-1">
+                                                <Label className="text-[11px] leading-tight text-text-muted">Profiles priced</Label>
+                                                {PROFILE_BASIS_OPTIONS.map((b) => (
+                                                    <button
+                                                        key={b.value}
+                                                        type="button"
+                                                        onClick={() => setSectionTypeRates({
+                                                            ...sectionTypeRates,
+                                                            [typeRate.sectionTypeKey]: { ...typeRate, profileRateBasis: b.value },
+                                                        })}
+                                                        className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors ${typeRate.profileRateBasis === b.value
+                                                            ? "bg-text text-text-inverse border-text"
+                                                            : "bg-surface text-text-muted border-border hover:bg-surface-muted"
+                                                            }`}
+                                                    >
+                                                        {b.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+
                                             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                                                {Object.keys(typeRate.profileRates).map((category) => (
-                                                    <div key={category}>
-                                                        <Label className="text-[11px] mb-0.5 leading-tight">{MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category} (₹/ft)</Label>
+                                                {typeRate.profileRateBasis === "weight" ? (
+                                                    <>
+                                                        {/* One combined rate for the whole material group. */}
+                                                        <div className="col-span-2">
+                                                            <Label className="text-[11px] mb-0.5 leading-tight">
+                                                                {typeRate.profileGroupLabel} (₹/kg)
+                                                                <span className="text-text-muted">
+                                                                    {" — "}{typeRate.profileGroupCategories
+                                                                        .map((c) => MATERIAL_CATEGORY_LABELS[c as keyof typeof MATERIAL_CATEGORY_LABELS] ?? c)
+                                                                        .join(" + ")}
+                                                                </span>
+                                                            </Label>
+                                                            <Input
+                                                                type="number"
+                                                                className="h-8 text-sm"
+                                                                value={typeRate.profileGroupRatePerKg || ""}
+                                                                onChange={(e) => setSectionTypeRates({
+                                                                    ...sectionTypeRates,
+                                                                    [typeRate.sectionTypeKey]: { ...typeRate, profileGroupRatePerKg: parseFloat(e.target.value) || 0 },
+                                                                })}
+                                                            />
+                                                        </div>
+                                                        {/* Members outside the group keep their own ₹/kg. */}
+                                                        {Object.keys(typeRate.profileWeightRates)
+                                                            .filter((category) => !typeRate.profileGroupCategories.includes(category))
+                                                            .map((category) => (
+                                                                <div key={`kg-${category}`}>
+                                                                    <Label className="text-[11px] mb-0.5 leading-tight">{MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category} (₹/kg)</Label>
+                                                                    <Input
+                                                                        type="number"
+                                                                        className="h-8 text-sm"
+                                                                        value={typeRate.profileRatesPerKg[category] || ""}
+                                                                        onChange={(e) => setSectionTypeRates({
+                                                                            ...sectionTypeRates,
+                                                                            [typeRate.sectionTypeKey]: {
+                                                                                ...typeRate,
+                                                                                profileRatesPerKg: { ...typeRate.profileRatesPerKg, [category]: parseFloat(e.target.value) || 0 },
+                                                                            },
+                                                                        })}
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                    </>
+                                                ) : (
+                                                    Object.keys(typeRate.profileRates).map((category) => (
+                                                        <div key={category}>
+                                                            <Label className="text-[11px] mb-0.5 leading-tight">{MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category} (₹/ft)</Label>
+                                                            <Input
+                                                                type="number"
+                                                                className="h-8 text-sm"
+                                                                value={typeRate.profileRates[category] || ""}
+                                                                onChange={(e) => setSectionTypeRates({
+                                                                    ...sectionTypeRates,
+                                                                    [typeRate.sectionTypeKey]: {
+                                                                        ...typeRate,
+                                                                        profileRates: { ...typeRate.profileRates, [category]: parseFloat(e.target.value) || 0 },
+                                                                    },
+                                                                })}
+                                                            />
+                                                        </div>
+                                                    ))
+                                                )}
+                                                {/* One rate input per active catalog item. Adding an item in
+                                                    /admin/hardware appears here automatically. */}
+                                                {activeHardware.map((item) => (
+                                                    <div key={item.key}>
+                                                        <Label className="text-[11px] mb-0.5 leading-tight">{item.label} (₹/{item.unit})</Label>
                                                         <Input
                                                             type="number"
                                                             className="h-8 text-sm"
-                                                            value={typeRate.profileRates[category] || ""}
+                                                            value={typeRate.hardwareRates[item.key] || ""}
                                                             onChange={(e) => setSectionTypeRates({
                                                                 ...sectionTypeRates,
                                                                 [typeRate.sectionTypeKey]: {
                                                                     ...typeRate,
-                                                                    profileRates: { ...typeRate.profileRates, [category]: parseFloat(e.target.value) || 0 },
+                                                                    hardwareRates: { ...typeRate.hardwareRates, [item.key]: parseFloat(e.target.value) || 0 },
                                                                 },
                                                             })}
                                                         />
                                                     </div>
                                                 ))}
-                                                <div>
-                                                    <Label className="text-[11px] mb-0.5 leading-tight">Mesh (₹)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        className="h-8 text-sm"
-                                                        value={typeRate.meshRate || ""}
-                                                        onChange={(e) => setSectionTypeRates({
-                                                            ...sectionTypeRates,
-                                                            [typeRate.sectionTypeKey]: { ...typeRate, meshRate: parseFloat(e.target.value) || 0 },
-                                                        })}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label className="text-[11px] mb-0.5 leading-tight">Track Cap (₹)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        className="h-8 text-sm"
-                                                        value={typeRate.trackCapRate || ""}
-                                                        onChange={(e) => setSectionTypeRates({
-                                                            ...sectionTypeRates,
-                                                            [typeRate.sectionTypeKey]: { ...typeRate, trackCapRate: parseFloat(e.target.value) || 0 },
-                                                        })}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label className="text-[11px] mb-0.5 leading-tight">Lock (₹)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        className="h-8 text-sm"
-                                                        value={typeRate.lockRate || ""}
-                                                        onChange={(e) => setSectionTypeRates({
-                                                            ...sectionTypeRates,
-                                                            [typeRate.sectionTypeKey]: { ...typeRate, lockRate: parseFloat(e.target.value) || 0 },
-                                                        })}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label className="text-[11px] mb-0.5 leading-tight">Bearing (₹)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        className="h-8 text-sm"
-                                                        value={typeRate.bearingRate || ""}
-                                                        onChange={(e) => setSectionTypeRates({
-                                                            ...sectionTypeRates,
-                                                            [typeRate.sectionTypeKey]: { ...typeRate, bearingRate: parseFloat(e.target.value) || 0 },
-                                                        })}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label className="text-[11px] mb-0.5 leading-tight">Corner (₹)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        className="h-8 text-sm"
-                                                        value={typeRate.cornerRate || ""}
-                                                        onChange={(e) => setSectionTypeRates({
-                                                            ...sectionTypeRates,
-                                                            [typeRate.sectionTypeKey]: { ...typeRate, cornerRate: parseFloat(e.target.value) || 0 },
-                                                        })}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label className="text-[11px] mb-0.5 leading-tight">PVC Connector (₹)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        className="h-8 text-sm"
-                                                        value={typeRate.connectorRate || ""}
-                                                        onChange={(e) => setSectionTypeRates({
-                                                            ...sectionTypeRates,
-                                                            [typeRate.sectionTypeKey]: { ...typeRate, connectorRate: parseFloat(e.target.value) || 0 },
-                                                        })}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label className="text-[11px] mb-0.5 leading-tight">Male-Female Cap (₹)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        className="h-8 text-sm"
-                                                        value={typeRate.capRate || ""}
-                                                        onChange={(e) => setSectionTypeRates({
-                                                            ...sectionTypeRates,
-                                                            [typeRate.sectionTypeKey]: { ...typeRate, capRate: parseFloat(e.target.value) || 0 },
-                                                        })}
-                                                    />
-                                                </div>
-                                                {Object.keys(typeRate.profileWeightRates).map((category) => (
-                                                    <div key={`weight-${category}`}>
-                                                        <Label className="text-[11px] mb-0.5 leading-tight">{MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category} (kg/ft)</Label>
-                                                        <Input
-                                                            type="number"
-                                                            className="h-8 text-sm"
-                                                            value={typeRate.profileWeightRates[category] || ""}
-                                                            onChange={(e) => setSectionTypeRates({
-                                                                ...sectionTypeRates,
-                                                                [typeRate.sectionTypeKey]: {
-                                                                    ...typeRate,
-                                                                    profileWeightRates: { ...typeRate.profileWeightRates, [category]: parseFloat(e.target.value) || 0 },
-                                                                },
-                                                            })}
-                                                        />
-                                                    </div>
-                                                ))}
+                                                {Object.keys(typeRate.profileWeightRates).map((category) => {
+                                                    const missing = typeRate.profileRateBasis === "weight" && !typeRate.profileWeightRates[category];
+                                                    return (
+                                                        <div key={`weight-${category}`}>
+                                                            <Label className="text-[11px] mb-0.5 leading-tight">{MATERIAL_CATEGORY_LABELS[category as keyof typeof MATERIAL_CATEGORY_LABELS] ?? category} (kg/ft)</Label>
+                                                            <Input
+                                                                type="number"
+                                                                className={`h-8 text-sm ${missing ? "border-danger" : ""}`}
+                                                                value={typeRate.profileWeightRates[category] || ""}
+                                                                onChange={(e) => setSectionTypeRates({
+                                                                    ...sectionTypeRates,
+                                                                    [typeRate.sectionTypeKey]: {
+                                                                        ...typeRate,
+                                                                        profileWeightRates: { ...typeRate.profileWeightRates, [category]: parseFloat(e.target.value) || 0 },
+                                                                    },
+                                                                })}
+                                                            />
+                                                            {/* Pricing by weight with no kg/ft set means this
+                                                                member silently costs ₹0 — flag it here. */}
+                                                            {missing && <p className="text-[10px] text-danger mt-0.5">Needed — prices at ₹0</p>}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
 
                                             {rateCard && Object.keys(rateCard.glassRates).length > 0 && (
@@ -1456,18 +1615,12 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                 <div className="flex items-center justify-between">
                                     <h2 className="font-semibold text-lg text-text">Window Sections</h2>
                                     <div className="flex items-center gap-2">
-                                        <div className="flex gap-1 bg-surface border border-border rounded-lg p-1">
-                                            {(["mm", "ft"] as const).map((u) => (
-                                                <button
-                                                    key={u}
-                                                    type="button"
-                                                    onClick={() => setManualUnitMode(u)}
-                                                    className={`px-2.5 py-1 rounded-md text-xs font-medium ${manualUnitMode === u ? "bg-text text-surface" : "text-text-muted hover:text-text"}`}
-                                                >
-                                                    {u}
-                                                </button>
-                                            ))}
-                                        </div>
+                                        <UnitToggle
+                                            unitMode={manualUnitMode}
+                                            onChange={setManualUnitMode}
+                                            compact
+                                            label=""
+                                        />
                                         <Button type="button" size="sm" variant="outline" onClick={addManualSection}>
                                             <Plus className="w-4 h-4 mr-1" /> Add Section
                                         </Button>
@@ -1733,17 +1886,45 @@ export default function QuotationBuilder({ worksheetId, initialRateCard, initial
                                     </div>
                                 )}
                                 <div className="space-y-1.5 border-t border-white/20 pt-3">
-                                    {totals.costBreakdownByName.map((line) => (
-                                        <div key={line.name} className="flex justify-between">
-                                            <span className="text-text-inverse/70">
-                                                {line.name}
-                                                {line.amount > 0 && (
-                                                    <span className="text-text-inverse/40"> ({line.amount.toFixed(2)} {line.unit})</span>
+                                    {totals.costBreakdownByName.map((line) => {
+                                        const expandable = (line.components?.length ?? 0) > 0;
+                                        const expanded = !!expandedCostLines[line.name];
+                                        return (
+                                            <div key={line.name}>
+                                                <div
+                                                    className={`flex justify-between ${expandable ? "cursor-pointer" : ""}`}
+                                                    onClick={expandable ? () => setExpandedCostLines((prev) => ({ ...prev, [line.name]: !prev[line.name] })) : undefined}
+                                                >
+                                                    <span className="text-text-inverse/70">
+                                                        {expandable && (
+                                                            <span className="text-text-inverse/40 mr-1">{expanded ? "−" : "+"}</span>
+                                                        )}
+                                                        {line.name}
+                                                        {line.amount > 0 && (
+                                                            <span className="text-text-inverse/40">
+                                                                {" "}({line.amount.toFixed(2)} {line.unit}
+                                                                {/* Rate is omitted when section types priced this
+                                                                    item differently — an average would mislead. */}
+                                                                {line.rate !== undefined && line.rate > 0 && ` @ ${formatCurrency(line.rate)}/${line.unit}`})
+                                                                {line.rate === undefined && ")"}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                    <span>{formatCurrency(line.cost)}</span>
+                                                </div>
+                                                {expandable && expanded && (
+                                                    <div className="pl-4 mt-1 space-y-0.5">
+                                                        {line.components!.map((component) => (
+                                                            <div key={component.key ?? component.name} className="flex justify-between text-xs text-text-inverse/50">
+                                                                <span>{component.name}</span>
+                                                                <span>{component.quantity.toFixed(2)} {component.unit}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 )}
-                                            </span>
-                                            <span>{formatCurrency(line.cost)}</span>
-                                        </div>
-                                    ))}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                                 <div className="flex justify-between border-t border-white/20 pt-2">
                                     <span className="text-text-inverse/70">Labor & Overhead</span>

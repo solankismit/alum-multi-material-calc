@@ -50,6 +50,8 @@ export default async function AdminDashboardPage() {
         }
     });
 
+    const hardwareCount = await db.hardwareItem.count({ where: { isActive: true } });
+
     return (
         <PageContainer contentClassName="space-y-8">
                 <div className="flex items-center justify-between">
@@ -81,6 +83,27 @@ export default async function AdminDashboardPage() {
                                 </p>
                                 <div className="mt-4 flex items-center text-sm text-indigo-600 font-medium">
                                     Manage Sections &rarr;
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </Link>
+
+                    {/* Hardware Catalog Card */}
+                    <Link href="/admin/hardware" className="block group">
+                        <Card className="h-full border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer bg-white">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium text-slate-500">
+                                    Hardware Catalog
+                                </CardTitle>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-slate-400"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-slate-900">{hardwareCount}</div>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Active Hardware Items
+                                </p>
+                                <div className="mt-4 flex items-center text-sm text-indigo-600 font-medium">
+                                    Manage Hardware &rarr;
                                 </div>
                             </CardContent>
                         </Card>

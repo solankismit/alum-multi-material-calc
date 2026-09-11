@@ -1,4 +1,5 @@
 import type { WindowDimension } from "../types";
+import { formatLength, UNIT_LABELS, type LengthUnit } from "./units";
 
 export interface DimensionValidationError {
   height?: string;
@@ -30,11 +31,29 @@ export const DIMENSION_CONSTRAINTS = {
 } as const;
 
 /**
+ * Builds a range message in whatever unit the user is typing in.
+ *
+ * This used to be an `if mm … else <hardcoded ft text>` pair, which meant a
+ * third unit silently showed the feet wording — and the feet wording was wrong
+ * anyway ("between 1ft and 10ft" against a real limit of ~984ft). Deriving it
+ * from DIMENSION_CONSTRAINTS keeps the message true for every unit.
+ */
+function rangeMessage(
+  label: "Height" | "Width",
+  min: number,
+  max: number,
+  unitMode: LengthUnit
+): string {
+  const suffix = UNIT_LABELS[unitMode];
+  return `${label} must be between ${formatLength(min, unitMode)}${suffix} and ${formatLength(max, unitMode)}${suffix}`;
+}
+
+/**
  * Validates a single dimension
  */
 export function validateDimension(
   dimension: WindowDimension,
-  unitMode: "mm" | "ft" = "mm"
+  unitMode: LengthUnit = "mm"
 ): DimensionValidationResult {
   const errors: DimensionValidationError = {};
   let isValid = true;
@@ -56,10 +75,12 @@ export function validateDimension(
       dimension.height > DIMENSION_CONSTRAINTS.height.max
     ) {
       isValid = false;
-      errors.height =
-        unitMode === "mm"
-          ? `Height must be between ${DIMENSION_CONSTRAINTS.height.min}mm and ${DIMENSION_CONSTRAINTS.height.max}mm`
-          : "Height must be between 1ft and 10ft (approx.)";
+      errors.height = rangeMessage(
+        "Height",
+        DIMENSION_CONSTRAINTS.height.min,
+        DIMENSION_CONSTRAINTS.height.max,
+        unitMode
+      );
     }
   } else {
     // Height is null but other fields have values - show error
@@ -76,10 +97,12 @@ export function validateDimension(
       dimension.width > DIMENSION_CONSTRAINTS.width.max
     ) {
       isValid = false;
-      errors.width =
-        unitMode === "mm"
-          ? `Width must be between ${DIMENSION_CONSTRAINTS.width.min}mm and ${DIMENSION_CONSTRAINTS.width.max}mm`
-          : "Width must be between 1ft and 16ft (approx.)";
+      errors.width = rangeMessage(
+        "Width",
+        DIMENSION_CONSTRAINTS.width.min,
+        DIMENSION_CONSTRAINTS.width.max,
+        unitMode
+      );
     }
   } else {
     // Width is null but other fields have values - show error
@@ -114,7 +137,7 @@ export function validateDimension(
  */
 export function validateSectionDimensions(
   dimensions: WindowDimension[],
-  unitMode: "mm" | "ft" = "mm"
+  unitMode: LengthUnit = "mm"
 ): {
   isValid: boolean;
   errors: {

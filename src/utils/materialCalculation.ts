@@ -3,8 +3,10 @@ import type {
   WindowDimension,
   DimensionGlassInfo,
   StockOption,
-  MaterialStockMap
+  MaterialStockMap,
+  SectionAccessories
 } from "../types";
+import { addHardwareCounts, type HardwareCountMap } from "./hardwareCatalog";
 import {
   optimizeStockUsage,
   optimizeCombinedStockUsage,
@@ -19,16 +21,6 @@ interface PieceCount {
   length: number;
   count: number;
 }
-
-type SectionAccessories = {
-  mosquitoCChannel: number;
-  trackCap: number;
-  lock: number;
-  bearing: number;
-  corner: number;
-  connector: number;
-  cap: number;
-};
 
 interface SectionMaterialsResult {
   materials: MaterialRequirement[];
@@ -140,17 +132,11 @@ function calculateAccessories(
   calculateAccessoriesFn: (
     quantity: number
   ) => { mosquitoCChannel: number; trackCap: number },
-  calculateHardwareCountsFn: (
-    quantity: number
-  ) => { lock: number; bearing: number; corner: number; connector: number; cap: number }
+  calculateHardwareCountsFn: (quantity: number) => HardwareCountMap
 ): SectionAccessories {
   let totalMosquitoCChannel = 0;
   let totalTrackCap = 0;
-  let totalLock = 0;
-  let totalBearing = 0;
-  let totalCorner = 0;
-  let totalConnector = 0;
-  let totalCap = 0;
+  const hardware: HardwareCountMap = {};
 
   dimensions.forEach((dim) => {
     const quantity = dim.quantity!;
@@ -158,22 +144,13 @@ function calculateAccessories(
     totalMosquitoCChannel += accessories.mosquitoCChannel;
     totalTrackCap += accessories.trackCap;
 
-    const hardware = calculateHardwareCountsFn(quantity);
-    totalLock += hardware.lock;
-    totalBearing += hardware.bearing;
-    totalCorner += hardware.corner;
-    totalConnector += hardware.connector;
-    totalCap += hardware.cap;
+    addHardwareCounts(hardware, calculateHardwareCountsFn(quantity));
   });
 
   return {
     mosquitoCChannel: totalMosquitoCChannel,
     trackCap: totalTrackCap,
-    lock: totalLock,
-    bearing: totalBearing,
-    corner: totalCorner,
-    connector: totalConnector,
-    cap: totalCap,
+    hardware,
   };
 }
 
@@ -442,7 +419,7 @@ export function calculateSectionMaterials(
   if (validDimensions.length === 0) {
     return {
       materials: [],
-      accessories: { mosquitoCChannel: 0, trackCap: 0, lock: 0, bearing: 0, corner: 0, connector: 0, cap: 0 },
+      accessories: { mosquitoCChannel: 0, trackCap: 0, hardware: {} },
       glassInfo: [],
     };
   }

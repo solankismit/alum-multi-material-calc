@@ -60,9 +60,14 @@ export default async function CreateQuotationPage({
     const rateCardRow = await db.rateCard.findUnique({ where: { userId: session.userId as string } });
     const initialRateCard: RateCardData | null = rateCardRow
         ? {
+            profileRateBasis: rateCardRow.profileRateBasis as RateCardData["profileRateBasis"],
             profileRatePerFt: rateCardRow.profileRatePerFt,
             profileRates: (rateCardRow.profileRates as Record<string, number>) ?? {},
             profileWeightPerFt: (rateCardRow.profileWeightPerFt as Record<string, number>) ?? {},
+            profileRatesPerKg: (rateCardRow.profileRatesPerKg as Record<string, number>) ?? {},
+            profileGroupCategories: rateCardRow.profileGroupCategories,
+            profileGroupLabel: rateCardRow.profileGroupLabel,
+            profileGroupRatePerKg: rateCardRow.profileGroupRatePerKg,
             glassRates: (rateCardRow.glassRates as Record<string, number>) ?? {},
             hardwareRates: (rateCardRow.hardwareRates as unknown as RateCardData["hardwareRates"]) ?? {},
             rubberRatePerSqft: rateCardRow.rubberRatePerSqft,
@@ -97,6 +102,13 @@ export default async function CreateQuotationPage({
         orderBy: { sortOrder: "asc" },
     });
 
+    // Global (admin-managed), so no user filter — see the HardwareItem model.
+    // Inactive items are included so a retired item still resolves a label for
+    // historical line items rather than falling back to its raw key.
+    const hardwareCatalog = await db.hardwareItem.findMany({
+        orderBy: { sortOrder: "asc" },
+    });
+
     return (
         <QuotationBuilder
             worksheetId={effectiveWorksheetId}
@@ -104,6 +116,7 @@ export default async function CreateQuotationPage({
             initialWorksheet={initialWorksheet}
             initialQuotation={initialQuotation}
             customFieldDefinitions={customFieldDefinitionRows}
+            hardwareCatalog={hardwareCatalog}
         />
     );
 }

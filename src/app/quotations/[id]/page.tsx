@@ -4,12 +4,13 @@ import Link from "next/link";
 import { getQuotation } from "../actions";
 import { listCustomers } from "@/app/customers/actions";
 import { AREA_SQMM_PER_SQFT } from "@/utils/formatters";
-import { splitTax, isQuotationLocked, pricingDataSchema, DEFAULT_TAX_TYPE, type PricingData } from "@/utils/quotationPricing";
+import { splitTax, isQuotationLocked, pricingDataSchema, deriveQuotationTotals, DEFAULT_TAX_TYPE, type PricingData } from "@/utils/quotationPricing";
 import { getCompanySnapshot } from "@/utils/companyConfig";
 import type { WindowInput } from "@/types";
 import QuotationDocument from "./QuotationDocument";
 import { verifySession } from "@/lib/session";
 import { db } from "@/lib/db";
+import type { LengthUnit } from "@/utils/units";
 
 interface PageProps {
     params: Promise<{ id: string }>;
@@ -60,43 +61,28 @@ export default async function QuotationView({ params }: PageProps) {
         orderBy: { sortOrder: "asc" },
     });
 
-    // Quotations saved after the per-section pricing change carry `pricing.sections`
-    // (one cost breakdown per window type). Older / freeform quotations keep the
-    // original flat `profiles`/`glass`/`accessories` arrays — both render correctly.
-    const usesSections = Array.isArray(pricing.sections) && pricing.sections.length > 0;
+    // Read from the rate card, not the browser, so this quotation prints in
+    // the same unit no matter which machine opens or shares it.
+    const rateCard = await db.rateCard.findUnique({
+        where: { userId: session.userId as string },
+        select: { displayLengthUnit: true },
+    });
+    const displayUnit = (rateCard?.displayLengthUnit as LengthUnit) ?? "mm";
 
-    let profilesTotal = 0;
-    let glassTotal = 0;
-    let accessoriesTotal = 0;
-    if (usesSections) {
-        pricing.sections!.forEach((section) => {
-            profilesTotal += section.profiles.reduce((acc, curr) => acc + curr.cost, 0);
-            glassTotal += section.glass.reduce((acc, curr) => acc + curr.cost, 0);
-            accessoriesTotal += section.accessories.reduce((acc, curr) => acc + curr.cost, 0);
-        });
-    } else {
-        profilesTotal = pricing.profiles.reduce((acc, curr) => acc + curr.cost, 0);
-        glassTotal = pricing.glass.reduce((acc, curr) => acc + curr.cost, 0);
-        accessoriesTotal = pricing.accessories.reduce((acc, curr) => acc + curr.cost, 0);
-    }
-    const materialCost = profilesTotal + glassTotal + accessoriesTotal;
-
-    // Installation/transportation amounts only count toward the subtotal when
-    // explicitly marked included — same rule as `computeTotals` in
-    // quotationPricing.ts. Discount is trusted from the persisted `amount`
-    // (set once at save time) rather than recomputed from `value`, since a
-    // percent discount's amount depends on the subtotal at save time.
-    const installationAmount = pricing.installation?.included ? (pricing.installation.amount || 0) : 0;
-    const transportationAmount = pricing.transportation?.included ? (pricing.transportation.amount || 0) : 0;
-    const subTotal = materialCost + (pricing.labor || 0) + (pricing.overhead || 0) + installationAmount + transportationAmount;
-    const discountAmount = pricing.discount?.amount || 0;
-    const discountedSubtotal = Math.max(0, subTotal - discountAmount);
-    const profitMargin = pricing.profitMargin || 0;
-    const taxRate = pricing.taxRate || 0;
-    const profitAmount = discountedSubtotal * (profitMargin / 100);
-    const taxAmount = (discountedSubtotal + profitAmount) * (taxRate / 100);
+    // Every total comes from the one shared derivation in quotationPricing —
+    // this page used to reimplement the subtotal inline while computeTotals
+    // sat unused beside it, and the cost sheet needs the identical figures.
+    const {
+        usesSections,
+        subTotal,
+        discountAmount,
+        profitMargin,
+        profitAmount,
+        taxRate,
+        taxAmount,
+        finalTotal,
+    } = deriveQuotationTotals(pricing);
     const taxSplit = splitTax(taxAmount, taxType);
-    const finalTotal = discountedSubtotal + profitAmount + taxAmount;
 
     const business = quote.user ? getCompanySnapshot(quote.user) : getCompanySnapshot({});
     const customersRes = await listCustomers();
@@ -150,6 +136,7 @@ export default async function QuotationView({ params }: PageProps) {
             }}
             customers={customers}
             customFieldDefinitions={customFieldDefinitions}
+            displayUnit={displayUnit}
             pricing={pricing}
             taxType={taxType}
             usesSections={usesSections}
